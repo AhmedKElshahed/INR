@@ -5,3 +5,5 @@ Pillow
 scikit-image
 matplotlib
 lpips
+trimesh
+rtree
