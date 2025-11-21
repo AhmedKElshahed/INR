@@ -76,7 +76,7 @@ def train_occupancy(model_name, mesh_path, epochs=50, batch_size=4096, lr=1e-4):
 
     # 2. Data
     # We sample 2 million points for training to get good detail
-    dataset = OccupancyDataset(mesh_path, num_samples=2000000, on_surface_ratio=0.5)
+    dataset = OccupancyDataset(mesh_path, num_samples=200000, on_surface_ratio=0.5)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 
     # 3. Optimizer
@@ -123,7 +123,7 @@ def train_occupancy(model_name, mesh_path, epochs=50, batch_size=4096, lr=1e-4):
     print("Extracting mesh via Marching Cubes (resolution 256)...")
     
     # Higher resolution = better detail but slower
-    rec_mesh = extract_mesh(model, resolution=256, device=device)
+    rec_mesh = extract_mesh(model, resolution=128, device=device)
     
     if rec_mesh:
         out_path = f"outputs_3d/{model_name}_dragon.obj"
@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     for mname in models_to_run:
         try:
-            time_taken = train_occupancy(mname, MESH_PATH, epochs=20, batch_size=8192)
+            time_taken = train_occupancy(mname, MESH_PATH, epochs=20, batch_size=2048)
             
             with open('results_3d.csv', 'a', newline='') as f:
                 csv.writer(f).writerow([mname, f"{time_taken:.2f}", "Saved to outputs_3d/"])
