@@ -36,9 +36,11 @@ def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
     points = np.stack([grid_x.ravel(), grid_y.ravel(), grid_z.ravel()], axis=-1)
     points_t = torch.from_numpy(points).float().to(device)
     
-    # Query model in chunks to save VRAM
+    # Query model in chunks
     outputs = []
-    chunk_size = 50000
+    # Increase chunk size for multi-GPU (2x T4 can handle 100k+ easily)
+    chunk_size = 100000 
+    
     with torch.no_grad():
         for i in range(0, len(points_t), chunk_size):
             batch = points_t[i:i+chunk_size]
@@ -61,27 +63,44 @@ def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
 # TRAINING LOOP
 # ============================================================================
 
-def train_occupancy(model_name, mesh_path, epochs=50, batch_size=4096, lr=1e-4):
+def train_occupancy(model_name, mesh_path, epochs=20, batch_size=16384, lr=1e-4):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    gpu_count = torch.cuda.device_count()
+    
     print(f"\n{'='*60}")
     print(f"Training {model_name.upper()} on 3D Occupancy")
+    print(f"GPUs Available: {gpu_count} ({torch.cuda.get_device_name(0)})")
     print(f"{'='*60}")
 
     # 1. Config & Model
-    # Note: in_features=3 (x,y,z), out_features=1 (occupancy probability)
     cfg = BEST_CONFIGS[model_name].copy()
     hidden_layers = cfg.pop("hidden_layers", 4)
     model = create_model(model_name, in_features=3, out_features=1, hidden_layers=hidden_layers, **cfg)
+    
+    # [OPTIMIZATION] Multi-GPU Support
     model = model.to(device)
+    if gpu_count > 1:
+        print(f"-> Activating DataParallel on {gpu_count} GPUs")
+        model = nn.DataParallel(model)
 
     # 2. Data
-    # We sample 2 million points for training to get good detail
-    dataset = OccupancyDataset(mesh_path, num_samples=200000, on_surface_ratio=0.5)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    # We sample 1 million points (Good balance for speed/quality on Kaggle)
+    print("-> Generating dataset (this should take <30s if rtree is installed)...")
+    dataset = OccupancyDataset(mesh_path, num_samples=1000000, on_surface_ratio=0.5)
+    
+    # [OPTIMIZATION] Faster Data Loading
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        num_workers=2,      # Use 2 CPU cores to fetch data
+        pin_memory=True,    # Faster CPU->GPU transfer
+        persistent_workers=True # Keep workers alive between epochs
+    )
 
     # 3. Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss() # MSE works well for occupancy probabilities [0,1]
+    criterion = nn.MSELoss()
 
     # 4. Train
     start_time = time.time()
@@ -97,12 +116,6 @@ def train_occupancy(model_name, mesh_path, epochs=50, batch_size=4096, lr=1e-4):
             
             optimizer.zero_grad()
             preds = model(p)
-            
-            # Ensure outputs are in [0,1] range for IoU calculation logic (optional for loss depending on model output)
-            # Some INRs output logits, but our MSE approach assumes raw output approximates 0 or 1.
-            # If model output is unbounded, you might want torch.sigmoid(preds) here, 
-            # but standard SIREN/MFN usually train directly on regression targets.
-            
             loss = criterion(preds, t)
             loss.backward()
             optimizer.step()
@@ -110,25 +123,25 @@ def train_occupancy(model_name, mesh_path, epochs=50, batch_size=4096, lr=1e-4):
             total_loss += loss.item()
             
             with torch.no_grad():
-                # Calculate IoU on training batch
                 total_iou += calculate_iou(preds, t)
             steps += 1
             
-        print(f"Epoch {epoch+1}/{epochs} | Loss: {total_loss/steps:.5f} | Train IoU: {total_iou/steps:.4f}")
+        print(f"Epoch {epoch+1:02d}/{epochs} | Loss: {total_loss/steps:.5f} | Train IoU: {total_iou/steps:.4f}")
 
     duration = time.time() - start_time
 
     # 5. Extract and Save Mesh
     os.makedirs("outputs_3d", exist_ok=True)
-    print("Extracting mesh via Marching Cubes (resolution 256)...")
+    print("-> Extracting mesh via Marching Cubes (resolution 128)...")
     
-    # Higher resolution = better detail but slower
+    # Resolution 128 is fast and looks decent. 
+    # Go to 256 if you have time, but 128 prevents memory OOM on T4.
     rec_mesh = extract_mesh(model, resolution=128, device=device)
     
     if rec_mesh:
         out_path = f"outputs_3d/{model_name}_dragon.obj"
         rec_mesh.export(out_path)
-        print(f"Saved mesh to {out_path}")
+        print(f"-> Saved mesh to {out_path}")
     
     return duration
 
@@ -137,23 +150,30 @@ def train_occupancy(model_name, mesh_path, epochs=50, batch_size=4096, lr=1e-4):
 # ============================================================================
 
 if __name__ == "__main__":
-    # PATH TO YOUR INPUT MESH (change this)
-    MESH_PATH = "xyzrgb_dragon.obj" 
+    MESH_PATH = "dragon.obj" 
     
     if not os.path.exists(MESH_PATH):
-        print(f"Error: Could not find {MESH_PATH}. Please download a mesh (e.g. Stanford Dragon) first.")
+        print(f"Error: Could not find {MESH_PATH}. Please download a mesh first.")
         exit()
 
-    models_to_run = ["siren", "mfn", "wire", "incode", "fr"] # Add others as needed
+    # Check for fast ray tracing
+    try:
+        import rtree
+        print("Success: 'rtree' is installed. Data generation will be fast.")
+    except ImportError:
+        print("WARNING: 'rtree' not found. Data generation will be SLOW (CPU 100%).")
+        print("Run: !apt-get install -y libspatialindex-dev && pip install rtree")
+
+    models_to_run = ["siren", "mfn", "wire", "incode", "fr"]
     
-    # CSV logging
     with open('results_3d.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['Model', 'Time(s)', 'Note'])
 
     for mname in models_to_run:
         try:
-            time_taken = train_occupancy(mname, MESH_PATH, epochs=20, batch_size=2048)
+            # Batch size 16384 uses both T4s efficiently
+            time_taken = train_occupancy(mname, MESH_PATH, epochs=20, batch_size=16384)
             
             with open('results_3d.csv', 'a', newline='') as f:
                 csv.writer(f).writerow([mname, f"{time_taken:.2f}", "Saved to outputs_3d/"])
