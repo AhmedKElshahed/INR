@@ -1,3 +1,4 @@
+%%writefile src/data_3d.py
 import torch
 import numpy as np
 import trimesh
@@ -11,6 +12,7 @@ class OccupancyDataset(Dataset):
         on_surface_ratio: How many points should be near surface vs random uniform
         """
         print(f"Loading mesh: {mesh_path}...")
+        # Force mesh loading to ensure we have geometry
         self.mesh = trimesh.load(mesh_path, force='mesh')
         
         # 1. Normalize Mesh to unit sphere [-1, 1]
@@ -20,7 +22,7 @@ class OccupancyDataset(Dataset):
         self.mesh.apply_translation(-center)
         self.mesh.apply_scale(scale)
         
-        print("Generating 3D training points (this may take a moment)...")
+        print(f"Generating {num_samples} training points...")
         self.points, self.occupancies = self._sample_points(num_samples, on_surface_ratio)
         
         # Convert to Torch
@@ -43,9 +45,22 @@ class OccupancyDataset(Dataset):
         # Combine
         all_points = np.concatenate([points_uniform, points_surface], axis=0)
         
-        # C. Check occupancy (1 if inside, 0 if outside)
-        # trimesh.contains_points uses ray tracing
-        occupancy = self.mesh.contains(all_points).astype(np.float32)
+        # C. Check occupancy (Batched to prevent CPU Freeze)
+        print("-> Running occupancy check (Ray Tracing)...")
+        occupancy = np.zeros(len(all_points), dtype=np.float32)
+        
+        # Process in chunks of 50k to keep RAM low
+        chunk_size = 50000
+        for i in range(0, len(all_points), chunk_size):
+            end = min(i + chunk_size, len(all_points))
+            batch_points = all_points[i:end]
+            
+            # contains returns boolean, convert to float 0.0/1.0
+            occupancy[i:end] = self.mesh.contains(batch_points).astype(np.float32)
+            
+            # Simple progress indicator
+            if i % (chunk_size * 4) == 0:
+                print(f"   Processed {i}/{len(all_points)} points...")
         
         return all_points, occupancy
 
