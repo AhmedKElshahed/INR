@@ -86,7 +86,7 @@ def train_occupancy(model_name, mesh_path, epochs=20, batch_size=16384, lr=1e-4)
     # 2. Data
     # We sample 1 million points (Good balance for speed/quality on Kaggle)
     print("-> Generating dataset (this should take <30s if rtree is installed)...")
-    dataset = OccupancyDataset(mesh_path, num_samples=1000000, on_surface_ratio=0.5)
+    dataset = OccupancyDataset(mesh_path, num_samples=200000, on_surface_ratio=0.5)
     
     # [OPTIMIZATION] Faster Data Loading
     dataloader = DataLoader(
