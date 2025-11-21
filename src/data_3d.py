@@ -1,4 +1,3 @@
-%%writefile src/data_3d.py
 import torch
 import numpy as np
 import trimesh
