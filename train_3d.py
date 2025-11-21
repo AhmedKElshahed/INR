@@ -138,7 +138,7 @@ def train_occupancy(model_name, mesh_path, epochs=50, batch_size=4096, lr=1e-4):
 
 if __name__ == "__main__":
     # PATH TO YOUR INPUT MESH (change this)
-    MESH_PATH = "dragon.obj" 
+    MESH_PATH = "xyzrgb_dragon.obj" 
     
     if not os.path.exists(MESH_PATH):
         print(f"Error: Could not find {MESH_PATH}. Please download a mesh (e.g. Stanford Dragon) first.")
