@@ -4,18 +4,15 @@ from torch.utils.data import Dataset
 import os
 
 class OccupancyDataset(Dataset):
-    def __init__(self, mesh_path, num_samples=None, on_surface_ratio=None):
-        # Arguments are ignored because we load pre-processed data
-        data_path = "dragon_dataset.npz"
-        
-        if not os.path.exists(data_path):
-            raise FileNotFoundError(f"Could not find {data_path}. Please run generate_data.py first!")
+    def __init__(self, dataset_path):
+        # Logic updated: We now strictly trust the path passed to us
+        if not os.path.exists(dataset_path):
+            raise FileNotFoundError(f"Could not find {dataset_path}. Please run generate_data.py first!")
             
-        print(f"Loading pre-processed data from {data_path}...")
-        data = np.load(data_path)
+        print(f"Loading pre-processed data from {dataset_path}...")
+        data = np.load(dataset_path)
         
         self.points = torch.from_numpy(data['points'])
-        # Convert uint8/bool to float [N, 1]
         self.occupancies = torch.from_numpy(data['occupancies']).float().unsqueeze(1)
         
         print(f"Dataset loaded successfully: {len(self.points)} points.")
