@@ -65,14 +65,24 @@ def generate_data(mesh_path, output_path="dragon_dataset.npz", num_samples=50000
     
     # We process in chunks to prevent RAM spikes
     occupancy = np.zeros(len(all_points), dtype=np.uint8) 
-    chunk_size = 100000
     
-    for i in range(0, len(all_points), chunk_size):
-        end = min(i + chunk_size, len(all_points))
+    # --- FIX: REDUCE CHUNK SIZE ---
+    # Old: 100000 (Too big for laptop RAM without rtree)
+    # New: 2000 (Safe for almost any computer)
+    chunk_size = 2000 
+    
+    total_points = len(all_points)
+    
+    for i in range(0, total_points, chunk_size):
+        end = min(i + chunk_size, total_points)
         batch_points = all_points[i:end]
-        # .contains returns bool, we save as uint8 (0 or 1)
+        
+        # This check is now much lighter on RAM
         occupancy[i:end] = mesh.contains(batch_points)
-        print(f"   Checked {end}/{len(all_points)} points...")
+        
+        # Print progress every 10 chunks so we know it's working
+        if i % (chunk_size * 10) == 0:
+            print(f"   Checked {end}/{total_points} points...")
 
     # 6. Save to Disk
     print(f"-> Saving to {output_path}...")
@@ -81,7 +91,11 @@ def generate_data(mesh_path, output_path="dragon_dataset.npz", num_samples=50000
 
 if __name__ == "__main__":
     # Install open3d if missing: pip install open3d
-    if os.path.exists("dragon.obj"):
-        generate_data("dragon.obj", "dragon_dataset.npz", num_samples=500000)
+    # Using spot.obj or dragon.obj
+    filename = "dragon.obj" # or "spot.obj", whatever you downloaded
+    
+    if os.path.exists(filename):
+        # Generate the data
+        generate_data(filename, "dragon_dataset.npz", num_samples=500000)
     else:
-        print("Please download dragon.obj first!")
+        print(f"Please download {filename} first!")
