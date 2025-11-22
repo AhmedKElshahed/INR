@@ -92,7 +92,7 @@ def generate_data(mesh_path, output_path="dragon_dataset.npz", num_samples=50000
 if __name__ == "__main__":
     # Install open3d if missing: pip install open3d
     # Using spot.obj or dragon.obj
-    filename = "xcxcxscsdcdragon.obj" or "nefertiti.obj"
+    filename = "nefertiti.obj"
     
     if os.path.exists(filename):
         # Generate the data
