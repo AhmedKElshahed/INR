@@ -25,6 +25,9 @@ def train_inr_for_scale(
     rgb = lr_tensor.permute(1, 2, 0).reshape(-1, 3)
     
     model = model.to(device)
+    if device.type == 'cuda' and torch.cuda.device_count() > 1:
+        print(f"-> Activating DataParallel on {torch.cuda.device_count()} GPUs")
+        model = nn.DataParallel(model)
     dataset = TensorDataset(coords, rgb)
     pin = (device.type == 'cuda') and torch.cuda.is_available()
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=pin)
