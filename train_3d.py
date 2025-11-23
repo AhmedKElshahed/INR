@@ -16,6 +16,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from src.models import create_model
 from src.data_3d import OccupancyDataset
 from src.config import BEST_CONFIGS
+from src.config import BEST_CONFIGS_3D
 
 # ============================================================================
 # 3D UTILS
@@ -96,7 +97,7 @@ def train_occupancy(model_name, dataset_path, epochs=20, batch_size=4096, lr=1e-
     print(f"{'='*60}")
 
     # 2. Model Initialization
-    cfg = BEST_CONFIGS[model_name].copy()
+    cfg = BEST_CONFIGS_3D[model_name].copy()
     hidden_layers = cfg.pop("hidden_layers", 4)
     
     # in_features=3 (x,y,z), out_features=1 (occupancy probability)
