@@ -1,99 +1,159 @@
 import os
 import time
-import gc
-import traceback
 import torch
 import csv
-import lpips
+import argparse
+import traceback
+import gc
 from PIL import Image
 import torchvision.transforms as transforms
+import torch.nn.functional as F
 
-# Env fix must happen before imports that use OpenMP
+# Fix OpenMP conflict
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+import lpips
 from src.models import create_model
 from src.trainer import train_inr_for_scale
 from src.utils import save_tensor_image, save_rgb_image, save_comparison_grid
 from src.config import BEST_CONFIGS
 
+def load_and_process_image(image_path, scale):
+    """
+    Loads HR image and automatically downsamples it to create LR training data.
+    """
+    # 1. Load HR
+    img = Image.open(image_path).convert("RGB")
+    
+    # Make sure dimensions are even numbers (easier for downsampling)
+    w, h = img.size
+    w = w - (w % 2)
+    h = h - (h % 2)
+    img = img.crop((0, 0, w, h))
+    
+    hr_tensor = transforms.ToTensor()(img) # [C, H, W]
+    
+    # 2. Create LR (Downsample)
+    # We use bicubic downsampling to simulate a low-res image
+    lr_tensor = F.interpolate(
+        hr_tensor.unsqueeze(0), 
+        scale_factor=1/scale, 
+        mode='bicubic', 
+        align_corners=False, 
+        antialias=True
+    ).squeeze(0)
+    
+    # Clamp to valid range [0, 1]
+    lr_tensor = lr_tensor.clamp(0, 1)
+    
+    return hr_tensor, lr_tensor
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run INR Super-Resolution on a single image")
+    parser.add_argument("--image", type=str, required=True, help="Path to high-res image (e.g. butterfly.png)")
+    parser.add_argument("--scales", type=int, nargs='+', default=[4, 8], help="Scales to test (default: 4 8)")
+    parser.add_argument("--epochs", type=int, default=200, help="Training epochs")
+    args = parser.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # ------------------ SETTINGS ------------------
-    hr_dir = "DIV2K/DIV2K_train_HR"
-    lr_base_dir = "DIV2K/DIV2K_train_LR_bicubic"
-    img_id = "0788"
-    scales = [4, 8, 16]
+    if not os.path.exists(args.image):
+        print(f"Error: Image {args.image} not found.")
+        exit()
+
+    # ------------------ SETUP ------------------
+    img_name = os.path.splitext(os.path.basename(args.image))[0]
+    os.makedirs("outputs_2d", exist_ok=True)
     
-    # Training Parameters
-    DEFAULT_EPOCHS = 100
+    # Initialize Metric (LPIPS)
+    try:
+        lpips_fn = lpips.LPIPS(net='vgg').to('cpu').eval()
+    except:
+        print("Warning: LPIPS not installed/failed. Metrics might be incomplete.")
+        lpips_fn = None
+
+    # Models to run
+    model_order = ["siren", "mfn", "wire", "finer", "incode", "fr"]
+    
+    # Global Training Defaults
     DEFAULT_LR = 2e-4
-    DEFAULT_BS = 2000
+    DEFAULT_BS = 2000 # Pixels per batch
     DEFAULT_LOSS = "mse"
-    
-    model_order = ["siren", "mfn", "fourier", "gauss", "wire", "finer", "incode", "fr"]
-    per_model_train = {} # Add overrides here if needed
-
-    # ------------------ DATA LOADING ------------------
-    hr_image_path = os.path.join(hr_dir, f"{img_id}.png")
-    hr_image = Image.open(hr_image_path).convert("RGB")
-    to_tensor = transforms.ToTensor()
-    hr_tensor = to_tensor(hr_image)
-
-    lr_tensors = {}
-    for scale in scales:
-        lr_path = os.path.join(lr_base_dir, f"X{scale}", f"{img_id}x{scale}.png")
-        lr_tensors[scale] = to_tensor(Image.open(lr_path).convert("RGB"))
-
-    lpips_fn = lpips.LPIPS(net='vgg').to('cpu').eval()
-
-    os.makedirs("outputs", exist_ok=True)
-    hr_out = os.path.join("outputs", f"{img_id}_HR.png")
-    save_tensor_image(hr_tensor, hr_out)
 
     # ------------------ MAIN LOOP ------------------
     summary_history = []
-    print("\n" + "="*70 + "\nRUN ALL MODELS at ALL SCALES\n" + "="*70)
+    
+    print(f"\n{'='*70}")
+    print(f"PROCESSING: {args.image}")
+    print(f"{'='*70}")
 
-    for scale in scales:
+    for scale in args.scales:
         print(f"\n{'='*70}\nSCALE {scale}×\n{'='*70}")
+        
+        # Prepare Data
+        hr_tensor, lr_tensor = load_and_process_image(args.image, scale)
+        
+        print(f"Original Size: {hr_tensor.shape[1]}x{hr_tensor.shape[2]}")
+        print(f"Training Input: {lr_tensor.shape[1]}x{lr_tensor.shape[2]} (Simulated LR)")
+        
         results = {} 
 
         for mname in model_order:
-            cfg = BEST_CONFIGS[mname].copy()
+            # Config
+            cfg = BEST_CONFIGS.get(mname, {}).copy()
             hidden_layers = cfg.pop("hidden_layers", 4)
-            cfg_str = ", ".join([f"{k}={v}" for k, v in cfg.items()] + [f"hidden_layers={hidden_layers}"])
+            cfg_str = ", ".join([f"{k}={v}" for k, v in cfg.items()])
             
-            ovr = per_model_train.get(mname, {})
-            epochs, lr = ovr.get("epochs", DEFAULT_EPOCHS), ovr.get("lr", DEFAULT_LR)
-            batch_size, loss_type = ovr.get("batch_size", DEFAULT_BS), ovr.get("loss_type", DEFAULT_LOSS)
-
             print(f"\n{'-'*70}\n{mname.upper()} @ {scale}×\n{'-'*70}", flush=True)
 
-            model, pred_rgb = None, None
+            model = None
+            pred_rgb = None
+            
             try:
+                # Create Model
                 model = create_model(mname, hidden_layers=hidden_layers, **cfg)
                 
                 start_t = time.time()
+                
+                # Train
                 pred_rgb, psnr_val, ssim_val, lpips_val = train_inr_for_scale(
-                    model=model, hr_tensor=hr_tensor, lr_tensor=lr_tensors[scale],
-                    scale=scale, model_name=mname, config_str=cfg_str,
-                    epochs=epochs, lr=lr, batch_size=batch_size,
-                    device=device, lpips_fn=lpips_fn, loss_type=loss_type,
-                    checkpoint_dir=f'checkpoints_{mname}_{scale}x'
+                    model=model,
+                    hr_tensor=hr_tensor,
+                    lr_tensor=lr_tensor, # Train on the downsampled version
+                    scale=scale,
+                    model_name=mname,
+                    config_str=cfg_str,
+                    epochs=args.epochs,
+                    lr=DEFAULT_LR,
+                    batch_size=DEFAULT_BS,
+                    device=device,
+                    lpips_fn=lpips_fn,
+                    loss_type=DEFAULT_LOSS,
+                    checkpoint_dir=f'checkpoints_{mname}_{scale}x',
+                    csv_path='results_2d.csv'
                 )
+                
                 train_duration = time.time() - start_t
 
-                pred_out = os.path.join("outputs", f"{img_id}_{mname}_{scale}x.png")
+                # Save Prediction
+                pred_out = os.path.join("outputs_2d", f"{img_name}_{mname}_{scale}x.png")
                 save_rgb_image(pred_rgb, pred_out)
 
-                results[mname] = {'pred': pred_rgb, 'psnr': psnr_val, 'ssim': ssim_val, 'lpips': lpips_val}
+                results[mname] = {
+                    'pred': pred_rgb, 
+                    'psnr': psnr_val, 
+                    'ssim': ssim_val, 
+                    'lpips': lpips_val
+                }
                 
                 summary_history.append({
-                    'Model': mname, 'Scale': scale, 
-                    'PSNR': psnr_val, 'SSIM': ssim_val, 'LPIPS': lpips_val, 
-                    'Score': psnr_val + 10*ssim_val - 5*lpips_val,
+                    'Image': img_name,
+                    'Model': mname, 
+                    'Scale': scale, 
+                    'PSNR': psnr_val, 
+                    'SSIM': ssim_val, 
+                    'LPIPS': lpips_val, 
                     'Time(s)': train_duration
                 })
 
@@ -105,19 +165,21 @@ if __name__ == "__main__":
                 gc.collect()
                 if torch.cuda.is_available(): torch.cuda.empty_cache()
 
+        # Save Comparison Grid
         try:
-            grid_out = os.path.join("outputs", f"{img_id}_ALL_MODELS_{scale}x_comparison.png")
+            grid_out = os.path.join("outputs_2d", f"{img_name}_ALL_MODELS_{scale}x_grid.png")
             save_comparison_grid(hr_tensor, results, grid_out, cols=3)
             print(f"\nSaved Grid: {grid_out}", flush=True)
         except Exception as e:
             print(f"[WARN] Grid failed: {e}")
 
+    # Write Summary
     if summary_history:
-        with open('final_summary_metrics.csv', 'w', newline='') as f:
-            fieldnames = ['Model', 'Scale', 'PSNR', 'SSIM', 'LPIPS', 'Score', 'Time(s)']
+        with open('final_summary_2d.csv', 'w', newline='') as f:
+            fieldnames = ['Image', 'Model', 'Scale', 'PSNR', 'SSIM', 'LPIPS', 'Time(s)']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for row in summary_history:
                 row.update({k: f"{v:.4f}" if isinstance(v, float) else v for k, v in row.items()})
                 writer.writerow(row)
-        print("\nDone. Summary saved to final_summary_metrics.csv")
+        print("\nDone. Summary saved to final_summary_2d.csv")
