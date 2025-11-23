@@ -196,7 +196,7 @@ if __name__ == "__main__":
         exit()
 
     # Models to compare
-    models_to_run = ["siren", "mfn", "wire", "incode", "fr"]
+    models_to_run = ["wire", "finer", "gauss", "fourier"]
     
     # Initialize CSV Logging
     csv_file = 'results_3d.csv'
