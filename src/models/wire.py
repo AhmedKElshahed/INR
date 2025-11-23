@@ -1,4 +1,3 @@
-%%writefile src/models/wire.py
 import torch
 import torch.nn as nn
 import math
