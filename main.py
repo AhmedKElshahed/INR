@@ -74,7 +74,7 @@ if __name__ == "__main__":
         lpips_fn = None
 
     # Models to run
-    model_order = ["siren", "mfn", "wire", "finer", "incode", "fr"]
+    model_order = ["siren", "mfn", "wire", "finer", "incode", "fr", "gauss", "fourier"]
     
     # Global Training Defaults
     DEFAULT_LR = 2e-4
