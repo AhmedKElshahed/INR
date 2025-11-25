@@ -7,3 +7,4 @@ matplotlib
 lpips
 trimesh
 rtree
+open3d
