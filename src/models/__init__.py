@@ -1,5 +1,5 @@
 from .siren import Siren
-from .mfn import GaborMFN, FourierMFN, GaussianMFN
+from .mfn import GaborMFN, FourierMFN, GaussianMLP
 from .wire import Wire
 from .finer import FINER
 from .incode import INCode
@@ -23,11 +23,11 @@ def create_model(model_type, in_features=2, out_features=3, hidden_features=256,
                                       hidden_size=hidden_features, n_layers=hidden_layers,
                                       gamma=kwargs.get('gamma', 256),
                                       sigma=kwargs.get('sigma', 10.0)),
-                                      
-        'gauss':   lambda: GaussianMFN(in_size=in_features, out_size=out_features,
-                                       hidden_size=hidden_features, n_layers=hidden_layers,
-                                       input_scale=kwargs.get('input_scale', 256.0),
-                                       sigma=kwargs.get('sigma', 1.5)),
+        
+        # Corrected Gaussian Baseline (MLP with Gaussian activations)                              
+        'gauss':   lambda: GaussianMLP(in_features=in_features, out_features=out_features,
+                                       hidden_features=hidden_features, hidden_layers=hidden_layers,
+                                       sigma=kwargs.get('sigma', 1.0)),
                                        
         'wire':    lambda: Wire(in_features=in_features, out_features=out_features,
                                 hidden_features=hidden_features, hidden_layers=hidden_layers,
