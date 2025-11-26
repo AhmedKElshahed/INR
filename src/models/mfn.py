@@ -102,3 +102,41 @@ class GaussianMFN(MFNBase):
             GaussianLayer(in_size, hidden_size, sigma=sigma, input_scale=per_layer_scale)
             for _ in range(n_layers + 1)
         ])
+
+# --- CORRECT GAUSSIAN MLP (Matches Paper) ---
+class GaussianActivation(nn.Module):
+    def __init__(self, sigma=1.0):
+        super().__init__()
+        self.sigma = sigma
+    
+    def forward(self, x):
+        return torch.exp(-(x ** 2) / (2 * self.sigma ** 2))
+
+class GaussianMLP(nn.Module):
+    def __init__(self, in_features=2, hidden_features=256, hidden_layers=4, out_features=3, sigma=1.0):
+        super().__init__()
+        
+        # First layer
+        layers = [nn.Linear(in_features, hidden_features), GaussianActivation(sigma)]
+        
+        # Hidden layers
+        for _ in range(hidden_layers):
+            layers.append(nn.Linear(hidden_features, hidden_features))
+            layers.append(GaussianActivation(sigma))
+            
+        # Final layer (Linear, no activation)
+        layers.append(nn.Linear(hidden_features, out_features))
+        
+        self.net = nn.Sequential(*layers)
+        
+        # Initialization (Standard for Gaussian MLPs)
+        with torch.no_grad():
+            for m in self.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.normal_(m.weight, std=0.1)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+
+    def forward(self, x):
+        return self.net(x)
+
