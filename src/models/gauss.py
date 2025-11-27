@@ -35,20 +35,25 @@ class GaussianMLP(nn.Module):
 
     def init_weights(self):
         with torch.no_grad():
-            # 1. Standard Initialization for ALL layers first
-            for m in self.modules():
+            # 1. Standard Initialization for ALL linear layers
+            for m in self.net.modules():
                 if isinstance(m, nn.Linear):
                     # Standard initialization for weights (1 / sqrt(fan_in))
                     std = 1.0 / math.sqrt(m.weight.size(1))
                     nn.init.normal_(m.weight, mean=0.0, std=std)
-                    nn.init.zeros_(m.bias)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
 
-            # 2. CRITICAL FIX: Explicitly initialize the First Layer Bias
-            # We access the first layer directly using self.net[0]
-            # This ensures Gaussians are spread across the entire input domain [-scale, scale]
-            # instead of being clumped at 0.
+            # 2. CRITICAL FIX: Explicitly target the First Layer
+            # We access the first layer of the Sequential block directly.
+            # This avoids the fragile 'enumerate' logic that was failing.
             first_layer = self.net[0]
-            nn.init.uniform_(first_layer.bias, -self.input_scale, self.input_scale)
+            
+            # Verify it is actually linear (sanity check)
+            if isinstance(first_layer, nn.Linear) and first_layer.bias is not None:
+                # Spread biases across the input domain so Gaussians cover the image
+                nn.init.uniform_(first_layer.bias, -self.input_scale, self.input_scale)
+                print(f"GaussianMLP: First layer biases initialized uniform[-{self.input_scale}, {self.input_scale}]")
 
     def forward(self, x):
         # Scale inputs to drive high-frequency features
