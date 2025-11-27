@@ -30,16 +30,26 @@ class GaussianMLP(nn.Module):
         layers.append(nn.Linear(hidden_features, out_features))
         self.net = nn.Sequential(*layers)
         
-        # Initialization (Crucial for Gaussian MLPs)
+        # Apply specific initialization
+        self.init_weights()
+
+    def init_weights(self):
         with torch.no_grad():
-            for m in self.modules():
+            for i, m in enumerate(self.modules()):
                 if isinstance(m, nn.Linear):
-                    # Use Xavier/Kaiming-like init but scaled for Gaussian stability
-                    std = math.sqrt(2.0 / hidden_features)
+                    # Standard initialization for weights
+                    std = 1.0 / math.sqrt(m.weight.size(1))
                     nn.init.normal_(m.weight, mean=0.0, std=std)
+                    
                     if m.bias is not None:
-                        nn.init.zeros_(m.bias)
+                        # CRITICAL FIX:
+                        # For the first layer, spread biases across the input scale
+                        # so Gaussians are positioned all over the image, not just at 0.
+                        if i == 1: # The first Linear layer is usually index 1 in modules()
+                            nn.init.uniform_(m.bias, -self.input_scale, self.input_scale)
+                        else:
+                            nn.init.zeros_(m.bias)
 
     def forward(self, x):
-        # CRITICAL FIX: Scale inputs so the Gaussian functions cover the domain
+        # Scale inputs to drive high-frequency features
         return self.net(x * self.input_scale)
