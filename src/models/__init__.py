@@ -1,12 +1,12 @@
 from .siren import Siren
-from .mfn import GaborMFN, FourierMFN, GaussianMLP
+from .mfn import GaborMFN, FourierMFN  # Removed GaussianMFN from here
+from .gauss import GaussianMLP         # <--- NEW IMPORT
 from .wire import Wire
 from .finer import FINER
 from .incode import INCode
 from .fr import FRPaper
 
 def create_model(model_type, in_features=2, out_features=3, hidden_features=256, hidden_layers=4, **kwargs):
-    # Note: We pass in_features and out_features to the constructors now
     models = {
         'siren':   lambda: Siren(in_features=in_features, out_features=out_features, 
                                  hidden_features=hidden_features, hidden_layers=hidden_layers,
@@ -24,9 +24,10 @@ def create_model(model_type, in_features=2, out_features=3, hidden_features=256,
                                       gamma=kwargs.get('gamma', 256),
                                       sigma=kwargs.get('sigma', 10.0)),
         
-        # Corrected Gaussian Baseline (MLP with Gaussian activations)                              
+        # --- CHANGED: Now points to GaussianMLP ---
         'gauss':   lambda: GaussianMLP(in_features=in_features, out_features=out_features,
                                        hidden_features=hidden_features, hidden_layers=hidden_layers,
+                                       input_scale=kwargs.get('input_scale', 256.0),
                                        sigma=kwargs.get('sigma', 1.0)),
                                        
         'wire':    lambda: Wire(in_features=in_features, out_features=out_features,
