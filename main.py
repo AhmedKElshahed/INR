@@ -104,7 +104,11 @@ if __name__ == "__main__":
             try:
                 model = create_model(mname, hidden_layers=hidden_layers, **cfg)
                 start_t = time.time()
-                
+                if mname == 'gauss':
+                    current_lr = 1e-3  # Faster learning for Gaussian
+                else:
+                    current_lr = DEFAULT_LR  # Standard for SIREN/WIRE
+                    
                 pred_rgb, psnr_val, ssim_val, lpips_val = train_inr_for_scale(
                     model=model,
                     hr_tensor=hr_tensor,
