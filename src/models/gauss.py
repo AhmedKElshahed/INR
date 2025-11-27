@@ -35,20 +35,20 @@ class GaussianMLP(nn.Module):
 
     def init_weights(self):
         with torch.no_grad():
-            for i, m in enumerate(self.modules()):
+            # 1. Standard Initialization for ALL layers first
+            for m in self.modules():
                 if isinstance(m, nn.Linear):
-                    # Standard initialization for weights
+                    # Standard initialization for weights (1 / sqrt(fan_in))
                     std = 1.0 / math.sqrt(m.weight.size(1))
                     nn.init.normal_(m.weight, mean=0.0, std=std)
-                    
-                    if m.bias is not None:
-                        # CRITICAL FIX:
-                        # For the first layer, spread biases across the input scale
-                        # so Gaussians are positioned all over the image, not just at 0.
-                        if i == 1: # The first Linear layer is usually index 1 in modules()
-                            nn.init.uniform_(m.bias, -self.input_scale, self.input_scale)
-                        else:
-                            nn.init.zeros_(m.bias)
+                    nn.init.zeros_(m.bias)
+
+            # 2. CRITICAL FIX: Explicitly initialize the First Layer Bias
+            # We access the first layer directly using self.net[0]
+            # This ensures Gaussians are spread across the entire input domain [-scale, scale]
+            # instead of being clumped at 0.
+            first_layer = self.net[0]
+            nn.init.uniform_(first_layer.bias, -self.input_scale, self.input_scale)
 
     def forward(self, x):
         # Scale inputs to drive high-frequency features
