@@ -72,7 +72,7 @@ if __name__ == "__main__":
         lpips_fn = None
 
     # Models to run
-    model_order = ["gauss", "fourier"]
+    model_order = ["siren", "fr", "wire", "finer", "mfn", "incode", "gauss", "fourier"]
     
     # UPDATED: LR to match experiment exactly
     DEFAULT_LR = 1e-4 
