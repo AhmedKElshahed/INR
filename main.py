@@ -117,8 +117,8 @@ if __name__ == "__main__":
                     model_name=mname,
                     config_str=cfg_str,
                     epochs=args.epochs,
-                    lr=DEFAULT_LR,        # Now 1e-4
-                    batch_size=BATCH_SIZE, # Now Dynamic (likely 5000-10000)
+                    lr=current_lr,
+                    batch_size=BATCH_SIZE,
                     device=device,
                     lpips_fn=lpips_fn,
                     loss_type=DEFAULT_LOSS,
@@ -128,8 +128,11 @@ if __name__ == "__main__":
                 
                 train_duration = time.time() - start_t
 
-                pred_out = os.path.join("outputs_2d", f"{img_name}_{mname}_{scale}x.png")
-                save_rgb_image(pred_rgb, pred_out)
+                # --- NEW: SAVE INDIVIDUAL CLEAN IMAGE (No Text) ---
+                # Saves images like outputs_2d/siren_4x.png
+                clean_filename = f"{mname.lower()}_{scale}x.png"
+                pred_out_clean = os.path.join("outputs_2d", clean_filename)
+                save_rgb_image(pred_rgb, pred_out_clean)
 
                 results[mname] = {'pred': pred_rgb, 'psnr': psnr_val, 'ssim': ssim_val, 'lpips': lpips_val}
                 
@@ -146,8 +149,11 @@ if __name__ == "__main__":
                 gc.collect()
                 if torch.cuda.is_available(): torch.cuda.empty_cache()
 
+        # --- MODIFIED: SAVE COMPARISON GRID ---
         try:
             grid_out = os.path.join("outputs_2d", f"{img_name}_ALL_MODELS_{scale}x_grid.png")
+            # Note: For the grid to have no top text, ensure your 
+            # save_comparison_grid in src/utils.py doesn't render titles.
             save_comparison_grid(hr_tensor, results, grid_out, cols=3)
         except Exception as e:
             print(f"[WARN] Grid failed: {e}")
