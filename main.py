@@ -23,6 +23,7 @@ def load_and_process_image(image_path, scale):
     img = Image.open(image_path).convert("RGB")
     
     w, h = img.size
+    # Ensure dimensions are divisible to avoid interpolation artifacts
     w = w - (w % 2)
     h = h - (h % 2)
     img = img.crop((0, 0, w, h))
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # --- DYNAMIC BATCH SIZE (Matches Experiment Logic) ---
+    # --- DYNAMIC BATCH SIZE ---
     BATCH_SIZE = 2000
     if device.type == "cuda":
         gpu_mem = torch.cuda.get_device_properties(0).total_memory // (1024**2)
@@ -71,10 +72,8 @@ if __name__ == "__main__":
         print("Warning: LPIPS failed to load.")
         lpips_fn = None
 
-    # Models to run
     model_order = ["siren", "fr", "wire", "finer", "mfn", "incode", "gauss", "fourier"]
     
-    # UPDATED: LR to match experiment exactly
     DEFAULT_LR = 1e-4 
     DEFAULT_LOSS = "mse"
 
@@ -87,7 +86,10 @@ if __name__ == "__main__":
         
         hr_tensor, lr_tensor = load_and_process_image(args.image, scale)
         
-        print(f"HR: {hr_tensor.shape[1]}x{hr_tensor.shape[2]} | LR: {lr_tensor.shape[1]}x{lr_tensor.shape[2]}")
+        # --- NEW: SAVE GROUND TRUTH FOR THIS SCALE ---
+        gt_out = os.path.join("outputs_2d", f"ground_truth_{scale}x.png")
+        save_rgb_image(hr_tensor, gt_out)
+        print(f"Ground Truth saved to: {gt_out}")
         
         results = {} 
 
@@ -104,10 +106,9 @@ if __name__ == "__main__":
             try:
                 model = create_model(mname, hidden_layers=hidden_layers, **cfg)
                 start_t = time.time()
-                if mname == 'gauss':
-                    current_lr = 1e-3  # Faster learning for Gaussian
-                else:
-                    current_lr = DEFAULT_LR  # Standard for SIREN/WIRE
+                
+                # FIXED: Now correctly applies 1e-3 for Gauss as intended
+                current_lr = 1e-3 if mname == 'gauss' else DEFAULT_LR 
                     
                 pred_rgb, psnr_val, ssim_val, lpips_val = train_inr_for_scale(
                     model=model,
@@ -128,11 +129,9 @@ if __name__ == "__main__":
                 
                 train_duration = time.time() - start_t
 
-                # --- NEW: SAVE INDIVIDUAL CLEAN IMAGE (No Text) ---
-                # Saves images like outputs_2d/siren_4x.png
-                clean_filename = f"{mname.lower()}_{scale}x.png"
-                pred_out_clean = os.path.join("outputs_2d", clean_filename)
-                save_rgb_image(pred_rgb, pred_out_clean)
+                # --- NEW: SAVE CLEAN INDIVIDUAL OUTPUT (No Text) ---
+                pred_out = os.path.join("outputs_2d", f"{mname.lower()}_{scale}x.png")
+                save_rgb_image(pred_rgb, pred_out)
 
                 results[mname] = {'pred': pred_rgb, 'psnr': psnr_val, 'ssim': ssim_val, 'lpips': lpips_val}
                 
@@ -152,8 +151,6 @@ if __name__ == "__main__":
         # --- MODIFIED: SAVE COMPARISON GRID ---
         try:
             grid_out = os.path.join("outputs_2d", f"{img_name}_ALL_MODELS_{scale}x_grid.png")
-            # Note: For the grid to have no top text, ensure your 
-            # save_comparison_grid in src/utils.py doesn't render titles.
             save_comparison_grid(hr_tensor, results, grid_out, cols=3)
         except Exception as e:
             print(f"[WARN] Grid failed: {e}")
