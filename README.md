@@ -31,7 +31,7 @@ This project supports two distinct academic milestones:
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```text
 ├── src/
