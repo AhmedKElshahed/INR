@@ -72,9 +72,19 @@ def compute_metrics(hr_tensor, pred_rgb, lpips_fn, device):
 def _tensor_chw_to_numpy(img_chw):
     return img_chw.permute(1, 2, 0).detach().cpu().numpy().clip(0, 1)
 
-def save_rgb_image(pred_rgb, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    arr = (np.clip(pred_rgb, 0, 1) * 255.0).astype(np.uint8)
+def save_rgb_image(img_data, path):
+    # 1. Convert PyTorch Tensor to NumPy
+    if torch.is_tensor(img_data):
+        # Move to CPU, remove gradients, and convert to numpy
+        img_data = img_data.detach().cpu().numpy()
+    
+    # 2. Fix Dimension Order
+    # PyTorch is [Channels, Height, Width], but PIL/NumPy need [Height, Width, Channels]
+    if img_data.ndim == 3 and img_data.shape[0] == 3:
+        img_data = img_data.transpose(1, 2, 0)
+        
+    # 3. Scale and Save
+    arr = (np.clip(img_data, 0, 1) * 255.0).astype(np.uint8)
     Image.fromarray(arr).save(path)
 
 def save_tensor_image(img_chw, path):
