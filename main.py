@@ -90,6 +90,11 @@ if __name__ == "__main__":
         gt_out = os.path.join("outputs_2d", f"ground_truth_{scale}x.png")
         save_rgb_image(hr_tensor, gt_out)
         print(f"Ground Truth saved to: {gt_out}")
+
+        # --- SAVE LOW RESOLUTION FOR THIS SCALE ---
+        lr_out = os.path.join("outputs_2d", f"low_res_{scale}x.png")
+        save_rgb_image(lr_tensor, lr_out)
+        print(f"Low Resolution ({scale}x downsampled) saved to: {lr_out}")
         
         results = {} 
 
