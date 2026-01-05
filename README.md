@@ -41,4 +41,3 @@ This project supports two distinct academic milestones:
 │   └── utils.py       # Image processing, tensor-to-RGB saving, and grid generation
 ├── outputs_2d/        # Results folder containing PNG reconstructions and grids
 ├── main.py            # Primary script for running 2D Super-Resolution experiments
-└── references.bib     # BibLaTeX file for academic citations
