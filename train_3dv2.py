@@ -1,110 +1,143 @@
+import os
+import time
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
 import numpy as np
-import os
 import csv
-import time
+import argparse
+import traceback
+from torch.utils.data import DataLoader
+import skimage.measure
 import trimesh
-from skimage import measure
-from scipy.spatial import cKDTree
 
-# --- METRIC UTILITIES (Matching Paper Methodology) ---
+# Fix OpenMP conflict on Windows/Conda
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-def calculate_iou(pred_logits, gt_occupancy):
-    """Calculates Intersection over Union for 3D volumes."""
-    pred_binary = (torch.sigmoid(pred_logits) > 0.5).float()
-    intersection = (pred_binary * gt_occupancy).sum()
-    union = (pred_binary + gt_occupancy).clamp(0, 1).sum()
+from src.models import create_model
+from src.data_3d import OccupancyDataset
+from src.config import BEST_CONFIGS_3D
+
+# ============================================================================
+# 3D UTILS
+# ============================================================================
+
+def calculate_iou(pred_logits, target, threshold=0.5):
+    """Calculates Intersection over Union (IoU) as per Section 3.3 of the paper."""
+    probs = torch.sigmoid(pred_logits)
+    pred_bin = (probs > threshold).float()
+    intersection = (pred_bin * target).sum()
+    union = pred_bin.sum() + target.sum() - intersection
     return (intersection / (union + 1e-6)).item()
 
-def calculate_chamfer_dist(model, gt_mesh, resolution=128, device='cuda'):
-    """Calculates Chamfer Distance by extracting the mesh mid-train."""
+def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
+    """Implicit to Explicit conversion using Marching Cubes."""
     model.eval()
-    # 1. Create Grid
-    grid_coords = torch.meshgrid(torch.linspace(-1, 1, resolution),
-                                 torch.linspace(-1, 1, resolution),
-                                 torch.linspace(-1, 1, resolution), indexing='ij')
-    coords = torch.stack(grid_coords, dim=-1).reshape(-1, 3).to(device)
+    grid_points = np.linspace(-1, 1, resolution)
+    grid_x, grid_y, grid_z = np.meshgrid(grid_points, grid_points, grid_points, indexing='ij')
+    points = np.stack([grid_x.ravel(), grid_y.ravel(), grid_z.ravel()], axis=-1)
+    points_t = torch.from_numpy(points).float().to(device)
     
-    # 2. Query Model
+    outputs = []
+    chunk_size = 50000 
     with torch.no_grad():
-        logits = model(coords)
-        volume = torch.sigmoid(logits).reshape(resolution, resolution, resolution).cpu().numpy()
+        for i in range(0, len(points_t), chunk_size):
+            batch = points_t[i:i+chunk_size]
+            out = model(batch)
+            outputs.append(out.cpu())
+            
+    outputs = torch.sigmoid(torch.cat(outputs, dim=0)).numpy().reshape(resolution, resolution, resolution)
     
-    # 3. Marching Cubes
     try:
-        verts, faces, _, _ = measure.marching_cubes(volume, level=0.5)
-        # Normalize verts back to [-1, 1]
-        verts = (verts / resolution) * 2 - 1
-        recon_mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-        
-        # 4. Sample and Compute Distance
-        p_recon = recon_mesh.sample(10000)
-        p_gt = gt_mesh.sample(10000)
-        
-        one_way_dist = cKDTree(p_gt).query(p_recon)[0]
-        other_way_dist = cKDTree(p_recon).query(p_gt)[0]
-        return np.mean(one_way_dist**2) + np.mean(other_way_dist**2), len(verts)
-    except:
-        return 1.0, 0 # Return high error if no surface found
+        verts, faces, normals, values = skimage.measure.marching_cubes(outputs, level=threshold)
+        verts = verts / (resolution - 1) * 2 - 1
+        return trimesh.Trimesh(vertices=verts, faces=faces)
+    except ValueError:
+        return None
 
-# --- MAIN TRAINING SCRIPT ---
+# ============================================================================
+# TRAINING ENGINE
+# ============================================================================
 
-def train_occupancy(args, model, train_loader, gt_mesh):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
+def train_occupancy(model_name, dataset_path, epochs=20, batch_size=4096, lr=1e-4):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # SCIENTIFIC ADJUSTMENT: Paper uses BCE for occupancy classification
-    criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    # 1. Parameter Extraction for Insights
+    cfg = BEST_CONFIGS_3D[model_name].copy()
+    params_str = str(cfg) # Convert dict to string for CSV logging
+    hidden_layers = cfg.pop("hidden_layers", 4)
     
-    # Insight Export Setup
-    log_file = f"insights_{args.model_type}.csv"
+    model = create_model(model_name, in_features=3, out_features=1, hidden_layers=hidden_layers, **cfg).to(device)
+    dataset = OccupancyDataset(dataset_path)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.BCEWithLogitsLoss() 
+
+    # Prepare for Per-Epoch Logs
+    log_dir = "logs_3d"
+    os.makedirs(log_dir, exist_ok=True)
+    epoch_log_file = f"{log_dir}/{model_name}_training.csv"
     
-    print(f"Starting optimized training for {args.model_type}...")
-    
-    for epoch in range(args.epochs):
+    with open(epoch_log_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['epoch', 'loss', 'iou'])
+
+    start_time = time.time()
+    for epoch in range(epochs):
         model.train()
-        epoch_loss = 0
-        epoch_iou = 0
-        
-        for batch_coords, batch_occupancy in train_loader:
-            batch_coords, batch_occupancy = batch_coords.to(device), batch_occupancy.to(device)
-            
+        total_loss, total_iou, steps = 0, 0, 0
+        for p, t in dataloader:
+            p, t = p.to(device), t.to(device)
             optimizer.zero_grad()
-            output = model(batch_coords)
-            
-            # Binary Cross Entropy Loss
-            loss = criterion(output, batch_occupancy)
+            preds = model(p)
+            loss = criterion(preds, t)
             loss.backward()
             optimizer.step()
-            
-            epoch_loss += loss.item()
-            epoch_iou += calculate_iou(output, batch_occupancy)
-            
-        # Periodic Geometric Insights (Every 10 epochs to save time)
-        if epoch % 10 == 0:
-            chamfer, v_count = calculate_chamfer_dist(model, gt_mesh, device=device)
-            avg_iou = epoch_iou / len(train_loader)
-            avg_loss = epoch_loss / len(train_loader)
-            
-            # Export to CSV
-            file_exists = os.path.isfile(log_file)
-            with open(log_file, 'a', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=['epoch', 'bce_loss', 'iou', 'chamfer', 'verts'])
-                if not file_exists: writer.writeheader()
-                writer.writerow({
-                    'epoch': epoch,
-                    'bce_loss': f"{avg_loss:.6f}",
-                    'iou': f"{avg_iou:.4f}",
-                    'chamfer': f"{chamfer:.8f}",
-                    'verts': v_count
-                })
-            
-            print(f"Epoch {epoch} | Loss: {avg_loss:.4f} | IoU: {avg_iou:.4f} | Chamfer: {chamfer:.6f}")
+            total_loss += loss.item()
+            total_iou += calculate_iou(preds, t)
+            steps += 1
+        
+        avg_loss = total_loss/steps
+        avg_iou = total_iou/steps
+        print(f"Epoch {epoch+1:02d} | Loss: {avg_loss:.5f} | IoU: {avg_iou:.4f}")
+        
+        # Log per-epoch stats
+        with open(epoch_log_file, 'a', newline='') as f:
+            csv.writer(f).writerow([epoch+1, avg_loss, avg_iou])
 
-    # Final Export
-    model_name = f"{args.model_type}_final.obj"
-    export_mesh(model, model_name) # Call existing export function
+    duration = time.time() - start_time
+    rec_mesh = extract_mesh(model, resolution=128 if torch.cuda.is_available() else 64, device=device)
+    
+    if rec_mesh:
+        os.makedirs("outputs_3d", exist_ok=True)
+        mesh_name = os.path.basename(dataset_path).replace("_dataset.npz", "")
+        out_path = f"outputs_3d/{model_name}_{mesh_name}.obj"
+        rec_mesh.export(out_path)
+
+    return duration, avg_iou, params_str
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mesh", type=str, default="nefertiti.obj")
+    parser.add_argument("--epochs", type=int, default=20)
+    args = parser.parse_args()
+    
+    base_name = os.path.splitext(args.mesh)[0]
+    dataset_file = f"{base_name}_dataset.npz"
+
+    models_to_run = ["incode", "fr", "finer", "wire", "fourier", "gauss", "mfn", "siren"]
+    csv_file = 'results_3d_comparison.csv'
+    
+    if not os.path.exists(csv_file):
+        with open(csv_file, 'w', newline='') as f:
+            csv.writer(f).writerow(['Model', 'Mesh', 'Time(s)', 'Final_IoU', 'Config_Params'])
+
+    for mname in models_to_run:
+        try:
+            bs = 16384 if torch.cuda.is_available() else 2048
+            time_taken, final_iou, config_str = train_occupancy(mname, dataset_file, epochs=args.epochs, batch_size=bs)
+            
+            with open(csv_file, 'a', newline='') as f:
+                csv.writer(f).writerow([mname, base_name, f"{time_taken:.2f}", f"{final_iou:.4f}", config_str])
+                
+        except Exception as e:
+            print(f"[FAIL] {mname} crashed: {e}")
