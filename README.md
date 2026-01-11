@@ -56,9 +56,9 @@ source .venv/bin/activate      # Linux / macOS
 pip install -r requirements.txt
 ```
 
-# PART 1 — Image Super-Resolution (SISR)
+# PART 1 — Image Super-Resolution
 
-### Example: Run Super-Resolution with Custom Settings
+### Example: Run Super-Resolution
 
 You can specify the input image, number of training epochs, and multiple upscale factors:
 
