@@ -44,3 +44,48 @@ Included sample assets:
 ```bash
 git clone https://github.com/AhmedKElshahed/INR.git
 cd INR
+```
+
+### 2) Create a virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate      # Linux / macOS
+# .venv\Scripts\activate       # Windows PowerShell
+```
+
+### 3) Install repository dependencies
+```bash
+pip install -r requirements.txt
+```
+
+# PART 1 — Image Super-Resolution (SISR)
+
+### Example: Run Super-Resolution with Custom Settings
+
+You can specify the input image, number of training epochs, and multiple upscale factors:
+
+```bash
+python main.py --image 0788.png --epochs 100 --scales 2 4 8 16
+```
+
+
+# PART 2 — 3D Occupancy Reconstruction
+
+## Step 1 — Generate Occupancy Dataset from a Mesh
+
+To generate a training dataset from a mesh (e.g., `nefertiti.obj`), run:
+
+```bash
+python generate_data.py --mesh nefertiti.obj
+```
+
+## Step 2 — Train the Occupancy INR Model
+
+Once the dataset is generated, you can train the 3D INR model using:
+
+```bash
+python train_3dv2.py --mesh nefertiti.obj --epochs 50
+```
+
+
