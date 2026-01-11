@@ -5,7 +5,7 @@ coordinate-based MLPs that represent signals as continuous functions rather than
 
 It supports **two pipelines**:
 
-- **Part 1 — Image Super-Resolution (SISR)**: learn a continuous image function from a low-resolution image and query it at arbitrary resolution.
+- **Part 1 — Image Super-Resolution**: learn a continuous image function from a low-resolution image and query it at arbitrary resolution.
 - **Part 2 — 3D Occupancy Reconstruction**: learn a continuous occupancy function `f(x, y, z) -> {0, 1}` from sampled 3D points.
 
 ---
