@@ -1,43 +1,46 @@
 # Implicit Neural Representations (INR) for Super-Resolution and 3D Occupancy
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c?logo=pytorch)
-![License](https://img.shields.io/badge/License-MIT-green)
+This repository contains an experimental framework for **Implicit Neural Representations (INRs)**:
+coordinate-based MLPs that represent signals as continuous functions rather than discrete grids.
 
-This repository contains the implementation and experimental framework for **Implicit Neural Representations (INRs)**. This work explores how coordinate-based Multi-Layer Perceptrons (MLPs) can represent continuous signals, effectively overcoming the limitations of discrete pixel grids and voxel arrays.
+It supports **two pipelines**:
 
-
-
-## Research Context
-
-This project supports two distinct academic milestones:
-
-1.  **Practical Work Report**: Focused on **Single-Image Super-Resolution (SISR)**. It evaluates 8 state-of-the-art INR architectures (SIREN, WIRE, FINER, etc.) across various scales ($2\times$ to $16\times$) to analyze spectral bias and high-frequency reconstruction quality.
-2.  **Bachelor's Thesis**: Extends the 2D findings into **3D Occupancy**. It investigates how INRs can represent 3D volumes and occupancy grids in a memory-efficient, resolution-independent manner for robotics and computer vision applications.
-
-
+- **Part 1 — Image Super-Resolution (SISR)**: learn a continuous image function from a low-resolution image and query it at arbitrary resolution.
+- **Part 2 — 3D Occupancy Reconstruction**: learn a continuous occupancy function `f(x, y, z) -> {0, 1}` from sampled 3D points.
 
 ---
 
-## Key Features
+## Repository overview
 
-* **Comprehensive Model Library**: Standardized implementations of:
-    * **Activation-based**: SIREN, WIRE, GAUSS, FINER.
-    * **Encoding-based**: Fourier Features.
-    * **Structure-optimized**: INCODE, MFN, FR.
-* **Scale-Agnostic Super-Resolution**: Ability to query the continuous function at any resolution, providing smooth transitions between scales.
-* **Automated Evaluation Pipeline**: Integrated PSNR, SSIM, and LPIPS metrics using the LPIPS VGG-net backbone.
-* **High-Resolution Output**: Generates clean, individual PNG reconstructions for each model and unified comparison grids for qualitative analysis.
+Top-level entry points:
+
+- `main.py` — **2D Super-Resolution** experiments
+- `download_div2k.py` — helper to download/prepare DIV2K (if you use DIV2K)
+- `generate_data.py` — generate a 3D occupancy dataset (`.npz`) from an `.obj` mesh
+- `train_3d.py`, `train_3dv2.py` — **3D occupancy** training scripts
+
+Core code:
+
+- `src/models.py` — INR architectures (SIREN / WIRE / Fourier features / MFN / etc.)
+- `src/config.py` — model-specific hyperparameters
+- `src/trainer.py` — training loop, scheduling, batching
+- `src/utils.py` — I/O and visualization utilities
+
+Included sample assets:
+
+- `0788.png` — sample image for quick SR sanity-check
+- `dragon.obj`, `nefertiti.obj` — sample meshes
+- `dragon_dataset.npz`, `nefertiti_dataset.npz` — pre-generated occupancy datasets
+
+> Tip: if you’re unsure about arguments for any script, run:
+> `python <script>.py --help`
 
 ---
 
-## Repository Structure
+## Installation
 
-```text
-├── src/
-│   ├── models.py      # Architecture definitions for SIREN, WIRE, FR, etc.
-│   ├── trainer.py     # Training logic with dynamic batch sizing and LR scheduling
-│   ├── config.py      # Best-performing hyperparameters for each architecture
-│   └── utils.py       # Image processing, tensor-to-RGB saving, and grid generation
-├── outputs_2d/        # Results folder containing PNG reconstructions and grids
-├── main.py            # Primary script for running 2D Super-Resolution experiments
+### 1) Clone
+
+```bash
+git clone https://github.com/AhmedKElshahed/INR.git
+cd INR
