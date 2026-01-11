@@ -32,9 +32,6 @@ Included sample assets:
 - `dragon.obj`, `nefertiti.obj` — sample meshes
 - `dragon_dataset.npz`, `nefertiti_dataset.npz` — pre-generated occupancy datasets
 
-> Tip: if you’re unsure about arguments for any script, run:
-> `python <script>.py --help`
-
 ---
 
 ## Installation
