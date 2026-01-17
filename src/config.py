@@ -18,12 +18,12 @@ BEST_CONFIGS = {
 # Used by: train_3d.py
 # ----------------------------------------------------------------------------
 BEST_CONFIGS_3D = {
-    'siren':  {'first_omega_0': 50.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4},
+    'siren':  {'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4},
     'mfn':    {'input_scale': 10.0,  'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4},
     'fourier': {'gamma': 150.0, 'hidden_layers': 4, 'hidden_features': 512},
-    'gauss':  {'input_scale': 10.0, 'sigma': 1.0, 'hidden_layers': 4},
+    'gauss':  {'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4},
     'wire':   {'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4},
     'finer':  {'frequency_bands': 16, 'hidden_layers': 4},
-    'incode': {'scale': 25.0,'hidden_layers': 4},
+    'incode': {'scale': 50.0,'hidden_layers': 4},
     'fr':     {'F': 64, 'hidden_layers': 4},
 }
