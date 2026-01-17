@@ -58,7 +58,7 @@ def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
 # TRAINING ENGINE
 # ============================================================================
 
-def train_occupancy(model_name, dataset_path, epochs=20, batch_size=4096, lr=1e-3):
+def train_occupancy(model_name, dataset_path, epochs=20, batch_size=4096, lr=1e-4):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # 1. Parameter Extraction for Insights
