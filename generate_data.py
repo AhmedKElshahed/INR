@@ -51,7 +51,7 @@ def generate_data(mesh_path, output_path, num_samples=500000):
     n_uni = num_samples - n_surf
     p_uni = np.random.rand(n_uni, 3) * 2 - 1
     p_surf, _ = trimesh.sample.sample_surface(mesh, n_surf)
-    p_surf += np.random.normal(0, 0.005, p_surf.shape)
+    p_surf += np.random.normal(0, 0.002, p_surf.shape)
     all_points = np.concatenate([p_uni, p_surf], axis=0)
     
     # 5. Calculate Occupancy
