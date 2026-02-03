@@ -14,6 +14,53 @@ BEST_CONFIGS = {
 }
 
 # ----------------------------------------------------------------------------
+# GRID SEARCH SPACES (2D Super-Resolution)
+# Used by: gridsearch.py
+# Each key maps to a list of values to try for that hyperparameter.
+# Fixed params (like hidden_layers) can also be searched over.
+# ----------------------------------------------------------------------------
+GRID_SEARCH_SPACES = {
+    'siren': {
+        'first_omega_0': [30.0, 60.0, 80.0, 120.0],
+        'hidden_omega_0': [15.0, 30.0, 60.0],
+        'hidden_layers': [3, 4, 5],
+    },
+    'mfn': {
+        'input_scale': [64.0, 128.0, 256.0],
+        'alpha': [4.0, 6.0, 8.0],
+        'beta': [0.5, 1.0, 2.0],
+        'hidden_layers': [3, 4, 5],
+    },
+    'fourier': {
+        'gamma': [64, 128, 256, 512],
+        'hidden_layers': [3, 4, 5],
+    },
+    'gauss': {
+        'input_scale': [12.0, 24.0, 48.0],
+        'sigma': [0.5, 1.0, 2.0],
+        'hidden_layers': [3, 4, 5],
+    },
+    'wire': {
+        'first_omega_0': [5.0, 10.0, 20.0],
+        'hidden_omega_0': [5.0, 10.0, 20.0],
+        'sigma0': [1.0, 2.5, 5.0],
+        'hidden_layers': [3, 4, 5],
+    },
+    'finer': {
+        'frequency_bands': [4, 6, 8, 12],
+        'hidden_layers': [3, 4, 5],
+    },
+    'incode': {
+        'scale': [64, 128, 256],
+        'hidden_layers': [3, 4, 5],
+    },
+    'fr': {
+        'F': [32, 64, 128],
+        'hidden_layers': [3, 4, 5],
+    },
+}
+
+# ----------------------------------------------------------------------------
 # 3D OCCUPANCY CONFIGS (Low Frequency / Smoother)
 # Used by: train_3d.py
 # ----------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import os
 import csv
 from torch.utils.data import DataLoader, TensorDataset
 from datetime import datetime
-from .utils import get_mgrid, compute_metrics
+from .utils import get_mgrid, compute_metrics, compute_error_metrics
 
 def train_inr_for_scale(
     model, hr_tensor, lr_tensor, scale,
@@ -98,19 +98,21 @@ def train_inr_for_scale(
         pred_rgb = pred_rgb.clamp(0, 1).numpy().reshape(hr_h, hr_w, 3)
     
     psnr_val, ssim_val, lpips_val = compute_metrics(hr_tensor, pred_rgb, lpips_fn, device)
+    mae, rmse, error_std, error_map = compute_error_metrics(hr_tensor, pred_rgb)
     score = psnr_val + 10 * ssim_val - 5 * lpips_val
-    
+
     print(f"FINAL: PSNR {psnr_val:.2f} | SSIM {ssim_val:.4f} | LPIPS {lpips_val:.4f} | Score {score:.2f}")
-    
+    print(f"       MAE {mae:.4f} | RMSE {rmse:.4f} | Error Std {error_std:.4f}")
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     csv_exists = os.path.exists(csv_path)
     with open(csv_path, 'a', newline='') as f:
         writer = csv.writer(f)
         if not csv_exists:
-            writer.writerow(['timestamp', 'model', 'scale', 'config', 'psnr', 'ssim', 'lpips', 'score', 'epochs', 'lr', 'loss'])
-        writer.writerow([timestamp, model_name, scale, config_str, f"{psnr_val:.2f}", f"{ssim_val:.4f}", f"{lpips_val:.4f}", f"{score:.2f}", epochs, lr, loss_type])
-    
+            writer.writerow(['timestamp', 'model', 'scale', 'config', 'psnr', 'ssim', 'lpips', 'score', 'mae', 'rmse', 'error_std', 'epochs', 'lr', 'loss'])
+        writer.writerow([timestamp, model_name, scale, config_str, f"{psnr_val:.2f}", f"{ssim_val:.4f}", f"{lpips_val:.4f}", f"{score:.2f}", f"{mae:.4f}", f"{rmse:.4f}", f"{error_std:.4f}", epochs, lr, loss_type])
+
     final_path = os.path.join(checkpoint_dir, f"{model_name}_{scale}x_final.pth")
     torch.save({'model_state_dict': model.state_dict(), 'config': config_str}, final_path)
-    
-    return pred_rgb, psnr_val, ssim_val, lpips_val
+
+    return pred_rgb, psnr_val, ssim_val, lpips_val, mae, rmse, error_std, error_map

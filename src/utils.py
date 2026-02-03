@@ -69,6 +69,44 @@ def compute_metrics(hr_tensor, pred_rgb, lpips_fn, device):
 
     return psnr_val, ssim_val, lpips_val
 
+
+def compute_error_metrics(hr_tensor, pred_rgb):
+    """Compute per-pixel error statistics between HR ground truth and prediction.
+
+    Returns:
+        mae:       Mean Absolute Error across all pixels
+        rmse:      Root Mean Squared Error
+        error_std: Standard deviation of the per-pixel absolute error
+                   (measures how uniformly the model reconstructs across the image;
+                    low = consistent quality, high = variable quality across regions)
+        error_map: Per-pixel absolute error as numpy array [H, W] (grayscale, averaged over channels)
+    """
+    hr_np = hr_tensor.permute(1, 2, 0).detach().cpu().numpy()
+    # pred_rgb is already [H, W, 3] numpy in [0,1]
+    abs_error = np.abs(hr_np.astype(np.float64) - pred_rgb.astype(np.float64))
+
+    # Per-pixel error averaged across RGB channels -> [H, W]
+    error_map = abs_error.mean(axis=-1)
+
+    mae = float(np.mean(abs_error))
+    rmse = float(np.sqrt(np.mean(abs_error ** 2)))
+    error_std = float(np.std(error_map))
+
+    return mae, rmse, error_std, error_map
+
+
+def save_error_map(error_map, path):
+    """Save a per-pixel error heatmap as a PNG image."""
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+    im = ax.imshow(error_map, cmap='hot', vmin=0, vmax=error_map.max())
+    ax.set_title('Per-Pixel Error')
+    ax.axis('off')
+    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    plt.tight_layout()
+    plt.savefig(path, dpi=150, bbox_inches='tight')
+    plt.close()
+
 def _tensor_chw_to_numpy(img_chw):
     return img_chw.permute(1, 2, 0).detach().cpu().numpy().clip(0, 1)
 

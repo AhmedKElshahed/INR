@@ -15,7 +15,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import lpips
 from src.models import create_model
 from src.trainer import train_inr_for_scale
-from src.utils import save_tensor_image, save_rgb_image, save_comparison_grid
+from src.utils import save_tensor_image, save_rgb_image, save_comparison_grid, save_error_map
 from src.config import BEST_CONFIGS
 
 def load_and_process_image(image_path, scale):
@@ -46,6 +46,8 @@ if __name__ == "__main__":
     parser.add_argument("--image", type=str, required=True, help="Path to high-res image")
     parser.add_argument("--scales", type=int, nargs='+', default=[4, 8], help="Scales to test")
     parser.add_argument("--epochs", type=int, default=200, help="Training epochs")
+    parser.add_argument("--models", type=str, nargs='+', default=None,
+                        help="Models to run (e.g. --models siren wire). Default: all models.")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -72,7 +74,14 @@ if __name__ == "__main__":
         print("Warning: LPIPS failed to load.")
         lpips_fn = None
 
-    model_order = ["siren", "fr", "wire", "finer", "mfn", "incode", "gauss", "fourier"]
+    all_models = ["siren", "fr", "wire", "finer", "mfn", "incode", "gauss", "fourier"]
+    model_order = args.models if args.models else all_models
+
+    # Validate model names
+    for m in model_order:
+        if m not in all_models:
+            print(f"Error: Unknown model '{m}'. Available: {all_models}")
+            exit()
     
     DEFAULT_LR = 1e-4 
     DEFAULT_LOSS = "mse"
@@ -115,7 +124,7 @@ if __name__ == "__main__":
                 # FIXED: Now correctly applies 1e-3 for Gauss as intended
                 current_lr = 1e-3 if mname == 'gauss' else DEFAULT_LR 
                     
-                pred_rgb, psnr_val, ssim_val, lpips_val = train_inr_for_scale(
+                pred_rgb, psnr_val, ssim_val, lpips_val, mae, rmse, error_std, error_map = train_inr_for_scale(
                     model=model,
                     hr_tensor=hr_tensor,
                     lr_tensor=lr_tensor,
@@ -131,18 +140,24 @@ if __name__ == "__main__":
                     checkpoint_dir=f'checkpoints_{mname}_{scale}x',
                     csv_path='results_2d.csv'
                 )
-                
+
                 train_duration = time.time() - start_t
 
-                # --- NEW: SAVE CLEAN INDIVIDUAL OUTPUT (No Text) ---
+                # --- SAVE CLEAN INDIVIDUAL OUTPUT (No Text) ---
                 pred_out = os.path.join("outputs_2d", f"{mname.lower()}_{scale}x.png")
                 save_rgb_image(pred_rgb, pred_out)
 
+                # --- SAVE ERROR HEATMAP ---
+                err_out = os.path.join("outputs_2d", f"{mname.lower()}_{scale}x_error.png")
+                save_error_map(error_map, err_out)
+
                 results[mname] = {'pred': pred_rgb, 'psnr': psnr_val, 'ssim': ssim_val, 'lpips': lpips_val}
-                
+
                 summary_history.append({
-                    'Image': img_name, 'Model': mname, 'Scale': scale, 
-                    'PSNR': psnr_val, 'SSIM': ssim_val, 'LPIPS': lpips_val, 'Time(s)': train_duration
+                    'Image': img_name, 'Model': mname, 'Scale': scale,
+                    'PSNR': psnr_val, 'SSIM': ssim_val, 'LPIPS': lpips_val,
+                    'MAE': mae, 'RMSE': rmse, 'Error_Std': error_std,
+                    'Time(s)': train_duration
                 })
 
             except Exception as e:
@@ -162,7 +177,7 @@ if __name__ == "__main__":
 
     if summary_history:
         with open('final_summary_2d.csv', 'w', newline='') as f:
-            fieldnames = ['Image', 'Model', 'Scale', 'PSNR', 'SSIM', 'LPIPS', 'Time(s)']
+            fieldnames = ['Image', 'Model', 'Scale', 'PSNR', 'SSIM', 'LPIPS', 'MAE', 'RMSE', 'Error_Std', 'Time(s)']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for row in summary_history:
