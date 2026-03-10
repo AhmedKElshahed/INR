@@ -46,13 +46,24 @@ def generate_data(mesh_path, output_path, num_samples=500000):
     mesh.apply_scale(scale)
 
     # 4. Sample Points
+    # Strategy (following Occupancy Networks, Mescheder et al. CVPR 2019):
+    #   50% uniform random in the bounding box
+    #   25% near-surface with tight noise (sigma=0.005) — fine boundary detail
+    #   25% near-surface with loose noise (sigma=0.05)  — broader boundary region
     print(f"-> Sampling {num_samples} points...")
-    n_surf = num_samples // 2
-    n_uni = num_samples - n_surf
+    n_uni   = num_samples // 2
+    n_tight = (num_samples - n_uni) // 2
+    n_loose = num_samples - n_uni - n_tight
+
     p_uni = np.random.rand(n_uni, 3) * 2 - 1
-    p_surf, _ = trimesh.sample.sample_surface(mesh, n_surf)
-    p_surf += np.random.normal(0, 0.002, p_surf.shape)
-    all_points = np.concatenate([p_uni, p_surf], axis=0)
+
+    p_tight, _ = trimesh.sample.sample_surface(mesh, n_tight)
+    p_tight += np.random.normal(0, 0.005, p_tight.shape)
+
+    p_loose, _ = trimesh.sample.sample_surface(mesh, n_loose)
+    p_loose += np.random.normal(0, 0.05, p_loose.shape)
+
+    all_points = np.concatenate([p_uni, p_tight, p_loose], axis=0)
     
     # 5. Calculate Occupancy
     print("-> Ray tracing occupancy...")

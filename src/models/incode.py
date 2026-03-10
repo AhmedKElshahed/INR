@@ -14,6 +14,11 @@ class INCode(nn.Module):
     def __init__(self, in_features=2, hidden_features=256, hidden_layers=4,
                  out_features=3, scale=256, prior_dim=64):
         super().__init__()
+        # Note: scale is accepted for API compatibility but not used directly.
+        # INCode's harmonizer MLP starts with low omega (~1) and learns the right
+        # frequency schedule during training — injecting log(scale) at init causes
+        # high-frequency noise that prevents learning entirely.
+
         self.first = _INCodeComposerLayer(in_features, hidden_features)
         self.hiddens = nn.ModuleList([_INCodeComposerLayer(hidden_features, hidden_features) for _ in range(hidden_layers)])
         self.final = nn.Linear(hidden_features, out_features)

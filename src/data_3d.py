@@ -13,9 +13,7 @@ class OccupancyDataset(Dataset):
         
         # Load points
         self.points = torch.from_numpy(data['points']).float()
-        
-        # --- FIX: NORMALIZE COORDINATES TO [-1, 1] ---
-        # 1. Center the points
+
         min_vals = self.points.min(dim=0)[0]
         max_vals = self.points.max(dim=0)[0]
         center = (min_vals + max_vals) / 2
@@ -27,10 +25,14 @@ class OccupancyDataset(Dataset):
             self.points = self.points / max_dist
             
         print(f"-> Data Normalized. Range: [{self.points.min():.3f}, {self.points.max():.3f}]")
+        # Store normalization parameters so the training script can put the GT mesh
+        # into the same coordinate space as the predicted (marching-cubes) mesh.
+        self.norm_center = center.numpy()
+        self.norm_max_dist = max_dist.item()
         # ---------------------------------------------
 
         self.occupancies = torch.from_numpy(data['occupancies']).float().unsqueeze(1)
-        
+
         print(f"Dataset loaded successfully: {len(self.points)} points.")
 
     def __len__(self):

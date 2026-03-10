@@ -6,7 +6,7 @@ import numpy as np
 import csv
 import argparse
 import traceback
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 import skimage.measure
 import trimesh
 
@@ -18,35 +18,36 @@ from src.data_3d import OccupancyDataset
 from src.config import BEST_CONFIGS_3D
 
 # ============================================================================
-# 3D UTILS
+# 3D METRIC UTILS
 # ============================================================================
 
 def calculate_iou(pred_logits, target, threshold=0.5):
-    """Calculates Intersection over Union (IoU) as per Section 3.3 of the paper."""
+    """Intersection over Union for binary occupancy (logit inputs)."""
     probs = torch.sigmoid(pred_logits)
     pred_bin = (probs > threshold).float()
     intersection = (pred_bin * target).sum()
     union = pred_bin.sum() + target.sum() - intersection
     return (intersection / (union + 1e-6)).item()
 
+
 def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
-    """Implicit to Explicit conversion using Marching Cubes."""
+    """Implicit -> Explicit via Marching Cubes."""
     model.eval()
     grid_points = np.linspace(-1, 1, resolution)
     grid_x, grid_y, grid_z = np.meshgrid(grid_points, grid_points, grid_points, indexing='ij')
     points = np.stack([grid_x.ravel(), grid_y.ravel(), grid_z.ravel()], axis=-1)
     points_t = torch.from_numpy(points).float().to(device)
-    
+
     outputs = []
-    chunk_size = 50000 
+    chunk_size = 50000
     with torch.no_grad():
         for i in range(0, len(points_t), chunk_size):
-            batch = points_t[i:i+chunk_size]
+            batch = points_t[i:i + chunk_size]
             out = model(batch)
             outputs.append(out.cpu())
-            
+
     outputs = torch.sigmoid(torch.cat(outputs, dim=0)).numpy().reshape(resolution, resolution, resolution)
-    
+
     try:
         verts, faces, normals, values = skimage.measure.marching_cubes(outputs, level=threshold)
         verts = verts / (resolution - 1) * 2 - 1
@@ -54,38 +55,140 @@ def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
     except ValueError:
         return None
 
+
+def load_gt_mesh_normalized(mesh_path, norm_center, norm_max_dist):
+    """
+    Load the original .obj mesh and apply the same two-step normalization
+    used during data generation (generate_data.py + data_3d.py), so its
+    coordinate space matches the marching-cubes predicted mesh.
+    """
+    try:
+        mesh = trimesh.load(mesh_path, force='mesh')
+    except Exception as e:
+        print(f"  [WARN] Could not load GT mesh: {e}")
+        return None
+
+    verts = np.asarray(mesh.vertices, dtype=np.float64)
+
+    # Step 1: generate_data.py normalization (-> ≈ [-0.9, 0.9])
+    c1 = (verts.max(0) + verts.min(0)) / 2
+    s1 = 1.8 / (verts.max(0) - verts.min(0)).max()
+    verts = (verts - c1) * s1
+
+    # Step 2: data_3d.py normalization using the stored dataset params (-> [-1, 1])
+    verts = verts - norm_center.astype(np.float64)
+    if norm_max_dist > 0:
+        verts = verts / norm_max_dist
+
+    return trimesh.Trimesh(vertices=verts, faces=np.asarray(mesh.faces))
+
+
+def compute_chamfer_and_nc(gt_mesh, pred_mesh, n_samples=10000):
+    """
+    Chamfer L1 Distance and Normal Consistency between two meshes.
+    Both metrics follow: Occupancy Networks (Mescheder et al., CVPR 2019).
+      - Chamfer L1 = mean of (accuracy: pred->GT) + (completeness: GT->pred)
+      - Normal Consistency = mean |cos(angle)| between matched normals
+    """
+    try:
+        from scipy.spatial import cKDTree
+    except ImportError:
+        print("  [WARN] scipy not installed — skipping Chamfer/NC. Run: pip install scipy")
+        return float('nan'), float('nan')
+
+    try:
+        gt_pts,   gt_fidx   = trimesh.sample.sample_surface(gt_mesh,   n_samples)
+        pred_pts, pred_fidx = trimesh.sample.sample_surface(pred_mesh, n_samples)
+
+        gt_normals   = gt_mesh.face_normals[gt_fidx]
+        pred_normals = pred_mesh.face_normals[pred_fidx]
+
+        tree_gt   = cKDTree(gt_pts)
+        tree_pred = cKDTree(pred_pts)
+
+        d_pred2gt, idx_p2g = tree_gt.query(pred_pts)   # accuracy
+        d_gt2pred, _       = tree_pred.query(gt_pts)   # completeness
+
+        chamfer = (d_pred2gt.mean() + d_gt2pred.mean()) / 2.0
+
+        matched_gt_normals = gt_normals[idx_p2g]
+        nc = float(np.abs((pred_normals * matched_gt_normals).sum(axis=-1)).mean())
+
+        return float(chamfer), nc
+
+    except Exception as e:
+        print(f"  [WARN] Chamfer/NC computation failed: {e}")
+        return float('nan'), float('nan')
+
+
+def compute_eval_iou(model, val_loader, device):
+    """IoU on the held-out validation split (not seen during training)."""
+    model.eval()
+    total_iou, steps = 0.0, 0
+    with torch.no_grad():
+        for p, t in val_loader:
+            p, t = p.to(device), t.to(device)
+            preds = model(p)
+            total_iou += calculate_iou(preds, t)
+            steps += 1
+    return total_iou / max(steps, 1)
+
+
 # ============================================================================
 # TRAINING ENGINE
 # ============================================================================
 
-def train_occupancy(model_name, dataset_path, epochs=20, batch_size=4096, lr=1e-4):
+def train_occupancy(model_name, dataset_path, mesh_path=None,
+                    epochs=500, batch_size=4096, lr=1e-4):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # 1. Parameter Extraction for Insights
-    cfg = BEST_CONFIGS_3D[model_name].copy()
-    params_str = str(cfg) 
-    hidden_layers = cfg.pop("hidden_layers", 4)
-    
-    model = create_model(model_name, in_features=3, out_features=1, hidden_layers=hidden_layers, **cfg).to(device)
-    dataset = OccupancyDataset(dataset_path)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.BCEWithLogitsLoss() 
 
-    # Prepare for Per-Epoch Logs
+    cfg = BEST_CONFIGS_3D[model_name].copy()
+    params_str = str(cfg)
+    hidden_layers = cfg.pop("hidden_layers", 4)
+
+    model = create_model(model_name, in_features=3, out_features=1,
+                         hidden_layers=hidden_layers, **cfg).to(device)
+
+    # ---- Dataset: 90% train / 10% val split ----
+    dataset = OccupancyDataset(dataset_path)
+    val_size   = max(1, int(0.1 * len(dataset)))
+    train_size = len(dataset) - val_size
+    train_ds, val_ds = random_split(
+        dataset, [train_size, val_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=0)
+    val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=0)
+
+    # ---- Optimizer + cosine annealing LR schedule ----
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=epochs, eta_min=lr * 0.01
+    )
+    criterion = nn.BCEWithLogitsLoss()
+
+    # ---- Per-epoch log ----
     log_dir = "logs_3d"
     os.makedirs(log_dir, exist_ok=True)
-    epoch_log_file = f"{log_dir}/{model_name}_training.csv"
-    
-    with open(epoch_log_file, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['epoch', 'loss', 'iou'])
+    epoch_log = f"{log_dir}/{model_name}_training.csv"
+    with open(epoch_log, 'w', newline='') as f:
+        csv.writer(f).writerow(['epoch', 'train_loss', 'train_iou', 'lr'])
+
+    print(f"\n{'='*60}")
+    print(f"  Model : {model_name.upper()}")
+    print(f"  Device: {device}  |  Epochs: {epochs}  |  BS: {batch_size}")
+    print(f"  Train : {train_size} pts   |  Val: {val_size} pts")
+    print(f"{'='*60}")
 
     start_time = time.time()
+    avg_loss = avg_iou = 0.0
+
     for epoch in range(epochs):
         model.train()
-        total_loss, total_iou, steps = 0, 0, 0
-        for p, t in dataloader:
+        total_loss, total_iou, steps = 0.0, 0.0, 0
+
+        for p, t in train_loader:
             p, t = p.to(device), t.to(device)
             optimizer.zero_grad()
             preds = model(p)
@@ -93,57 +196,127 @@ def train_occupancy(model_name, dataset_path, epochs=20, batch_size=4096, lr=1e-
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-            total_iou += calculate_iou(preds, t)
+            total_iou  += calculate_iou(preds, t)
             steps += 1
-        
-        avg_loss = total_loss/steps
-        avg_iou = total_iou/steps
-        # [cite_start]Added model name to the epoch printout for clarity [cite: 13]
-        print(f"[{model_name.upper()}] Epoch {epoch+1:02d} | Loss: {avg_loss:.5f} | IoU: {avg_iou:.4f}")
-        
-        with open(epoch_log_file, 'a', newline='') as f:
-            csv.writer(f).writerow([epoch+1, avg_loss, avg_iou])
+
+        avg_loss = total_loss / steps
+        avg_iou  = total_iou  / steps
+        current_lr = scheduler.get_last_lr()[0]
+        scheduler.step()
+
+        # Print every 10 epochs or at the very end
+        if (epoch + 1) % 10 == 0 or epoch == 0 or (epoch + 1) == epochs:
+            print(f"[{model_name.upper():8s}] Epoch {epoch+1:03d}/{epochs} "
+                  f"| Loss: {avg_loss:.5f} | Train IoU: {avg_iou:.4f} | LR: {current_lr:.2e}")
+
+        with open(epoch_log, 'a', newline='') as f:
+            csv.writer(f).writerow([epoch + 1, f"{avg_loss:.6f}", f"{avg_iou:.5f}", f"{current_lr:.2e}"])
 
     duration = time.time() - start_time
-    rec_mesh = extract_mesh(model, resolution=128 if torch.cuda.is_available() else 64, device=device)
-    
-    if rec_mesh:
-        os.makedirs("outputs_3d", exist_ok=True)
-        mesh_name = os.path.basename(dataset_path).replace("_dataset.npz", "")
-        out_path = f"outputs_3d/{model_name}_{mesh_name}.obj"
-        rec_mesh.export(out_path)
 
-    return duration, avg_iou, params_str
+    # ---- Post-training: eval IoU on held-out validation split ----
+    print(f"\n[{model_name.upper()}] Computing eval IoU on validation split...")
+    eval_iou = compute_eval_iou(model, val_loader, device)
+    print(f"[{model_name.upper()}] Eval IoU: {eval_iou:.4f}")
+
+    # ---- Mesh extraction (Marching Cubes) ----
+    res = 128 if torch.cuda.is_available() else 64
+    print(f"[{model_name.upper()}] Extracting mesh (resolution={res})...")
+    os.makedirs("outputs_3d", exist_ok=True)
+    mesh_stem = os.path.basename(dataset_path).replace("_dataset.npz", "")
+    out_path = f"outputs_3d/{model_name}_{mesh_stem}.obj"
+
+    pred_mesh = extract_mesh(model, resolution=res, device=device)
+    if pred_mesh:
+        pred_mesh.export(out_path)
+        print(f"[{model_name.upper()}] Saved mesh -> {out_path}")
+    else:
+        print(f"[{model_name.upper()}] Warning: no surface extracted.")
+
+    # ---- Chamfer Distance + Normal Consistency (vs GT mesh) ----
+    chamfer, nc = float('nan'), float('nan')
+    if pred_mesh and mesh_path and os.path.exists(mesh_path):
+        print(f"[{model_name.upper()}] Computing Chamfer L1 & Normal Consistency...")
+        gt_mesh = load_gt_mesh_normalized(mesh_path, dataset.norm_center, dataset.norm_max_dist)
+        if gt_mesh is not None:
+            chamfer, nc = compute_chamfer_and_nc(gt_mesh, pred_mesh, n_samples=10000)
+            print(f"[{model_name.upper()}] Chamfer L1: {chamfer:.6f}  |  Normal Consistency: {nc:.4f}")
+
+    return duration, avg_iou, eval_iou, chamfer, nc, params_str
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mesh", type=str, default="nefertiti.obj")
-    parser.add_argument("--epochs", type=int, default=20)
+    parser = argparse.ArgumentParser(
+        description="3D Occupancy INR benchmark — trains all models on a mesh and reports IoU + Chamfer."
+    )
+    parser.add_argument("--mesh",   type=str,   default="nefertiti.obj",
+                        help="Input .obj mesh file")
+    parser.add_argument("--epochs", type=int,   default=500,
+                        help="Training epochs per model (500 recommended for IoU > 0.99)")
+    parser.add_argument("--lr",     type=float, default=1e-4,
+                        help="Initial learning rate (cosine-annealed to lr*0.01)")
     args = parser.parse_args()
-    
-    base_name = os.path.splitext(args.mesh)[0]
+
+    base_name    = os.path.splitext(args.mesh)[0]
     dataset_file = f"{base_name}_dataset.npz"
 
-    models_to_run = ["incode", "fr", "finer", "wire", "fourier", "gauss", "mfn", "siren"]
-    csv_file = 'results_3d_comparison.csv'
-    
-    if not os.path.exists(csv_file):
-        with open(csv_file, 'w', newline='') as f:
-            csv.writer(f).writerow(['Model', 'Mesh', 'Time(s)', 'Final_IoU', 'Config_Params'])
+    if not os.path.exists(dataset_file):
+        print(f"[ERROR] '{dataset_file}' not found.")
+        print(f"  Run: python generate_data.py --mesh {args.mesh}")
+        exit(1)
 
-    print(f"\n--- Starting 3D Occupancy Benchmark on: {args.mesh} ---")
+    models_to_run = ["siren", "wire", "finer", "gauss", "mfn", "fourier", "incode", "fr"]
+
+    csv_file = 'results_3d_comparison.csv'
+    write_header = not os.path.exists(csv_file)
+    with open(csv_file, 'a', newline='') as f:
+        if write_header:
+            csv.writer(f).writerow([
+                'Model', 'Mesh', 'Epochs', 'Time(s)',
+                'Final_Train_IoU', 'Eval_IoU',
+                'Chamfer_L1', 'Normal_Consistency',
+                'Config_Params'
+            ])
+
+    print(f"\n=== 3D Occupancy Benchmark ===")
+    print(f"  Mesh   : {args.mesh}")
+    print(f"  Epochs : {args.epochs}")
+    print(f"  LR     : {args.lr}")
+    print(f"  Models : {models_to_run}")
+    print(f"  Output : {csv_file}")
 
     for mname in models_to_run:
         try:
-            # [cite_start]Print current model name before training starts [cite: 13]
-            print(f"\n>> NOW TRAINING: {mname.upper()}") 
-            
+            print(f"\n{'='*60}")
+            print(f">> STARTING: {mname.upper()}")
             bs = 16384 if torch.cuda.is_available() else 2048
-            time_taken, final_iou, config_str = train_occupancy(mname, dataset_file, epochs=args.epochs, batch_size=bs)
-            
+
+            duration, train_iou, eval_iou, chamfer, nc, cfg_str = train_occupancy(
+                mname, dataset_file,
+                mesh_path=args.mesh,
+                epochs=args.epochs,
+                batch_size=bs,
+                lr=args.lr,
+            )
+
             with open(csv_file, 'a', newline='') as f:
-                csv.writer(f).writerow([mname, base_name, f"{time_taken:.2f}", f"{final_iou:.4f}", config_str])
-                
+                csv.writer(f).writerow([
+                    mname, base_name, args.epochs,
+                    f"{duration:.1f}",
+                    f"{train_iou:.4f}",
+                    f"{eval_iou:.4f}",
+                    f"{chamfer:.6f}" if not np.isnan(chamfer) else 'N/A',
+                    f"{nc:.4f}"      if not np.isnan(nc)      else 'N/A',
+                    cfg_str,
+                ])
+
         except Exception as e:
             print(f"[FAIL] {mname} crashed: {e}")
             traceback.print_exc()
+
+    print(f"\n{'='*60}")
+    print(f"Done. Results -> {csv_file} | Meshes -> outputs_3d/")

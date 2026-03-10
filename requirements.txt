@@ -8,3 +8,4 @@ lpips
 trimesh
 rtree
 open3d
+scipy
