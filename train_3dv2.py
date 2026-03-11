@@ -17,6 +17,12 @@ from src.models import create_model
 from src.data_3d import OccupancyDataset
 from src.config import BEST_CONFIGS_3D
 
+# Gauss activations have ~400x smaller gradients than sinusoidal activations,
+# so it needs a proportionally higher LR to converge in a reasonable epoch count.
+MODEL_LR_OVERRIDES = {
+    'gauss': 1e-3,
+}
+
 # ============================================================================
 # 3D METRIC UTILS
 # ============================================================================
@@ -162,9 +168,10 @@ def train_occupancy(model_name, dataset_path, mesh_path=None,
     val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=0)
 
     # ---- Optimizer + cosine annealing LR schedule ----
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    effective_lr = MODEL_LR_OVERRIDES.get(model_name, lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=effective_lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=epochs, eta_min=lr * 0.01
+        optimizer, T_max=epochs, eta_min=effective_lr * 0.01
     )
     criterion = nn.BCEWithLogitsLoss()
 
@@ -175,9 +182,11 @@ def train_occupancy(model_name, dataset_path, mesh_path=None,
     with open(epoch_log, 'w', newline='') as f:
         csv.writer(f).writerow(['epoch', 'train_loss', 'train_iou', 'lr'])
 
+    lr_note = f"  (override, default={lr:.0e})" if model_name in MODEL_LR_OVERRIDES else ""
     print(f"\n{'='*60}")
     print(f"  Model : {model_name.upper()}")
     print(f"  Device: {device}  |  Epochs: {epochs}  |  BS: {batch_size}")
+    print(f"  LR    : {effective_lr:.0e}{lr_note}")
     print(f"  Train : {train_size} pts   |  Val: {val_size} pts")
     print(f"{'='*60}")
 
