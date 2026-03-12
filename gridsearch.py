@@ -125,7 +125,23 @@ if __name__ == "__main__":
         with open(args.csv, 'w', newline='') as f:
             csv.DictWriter(f, fieldnames=csv_fields).writeheader()
 
+    # Resume support: load already-completed runs from CSV
+    completed_runs = set()
+    if csv_exists:
+        try:
+            with open(args.csv, 'r', newline='') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    key = (row.get('model', ''), row.get('scale', ''), row.get('hidden_layers', ''))
+                    hp_vals = tuple(row.get(hp, '') for hp in all_hp_names)
+                    completed_runs.add(key + hp_vals)
+            if completed_runs:
+                print(f"\nResuming: {len(completed_runs)} runs already completed, skipping them.")
+        except Exception:
+            pass
+
     run_idx = 0
+    skipped = 0
 
     for mname in models_to_search:
         search_space = GRID_SEARCH_SPACES[mname]
@@ -141,6 +157,15 @@ if __name__ == "__main__":
 
             for scale in args.scales:
                 run_idx += 1
+
+                # Resume: skip if this run already exists in CSV
+                run_key = (mname, str(scale), str(hidden_layers))
+                hp_vals = tuple(str(cfg.get(hp, '')) for hp in all_hp_names)
+                if run_key + hp_vals in completed_runs:
+                    skipped += 1
+                    print(f"[{run_idx}/{total_runs}] SKIP (already done) {mname.upper()} @ {scale}x | {cfg_str} | layers={hidden_layers}")
+                    continue
+
                 print(f"\n[{run_idx}/{total_runs}] {mname.upper()} @ {scale}x | {cfg_str} | layers={hidden_layers}")
 
                 model = None
@@ -206,6 +231,9 @@ if __name__ == "__main__":
     print(f"\n{'='*70}")
     print("GRID SEARCH COMPLETE — Best configs per model:")
     print(f"{'='*70}")
+    if skipped:
+        print(f"\nSkipped {skipped} already-completed runs (resume mode).")
+
     try:
         import pandas as pd
         df = pd.read_csv(args.csv)
@@ -214,8 +242,15 @@ if __name__ == "__main__":
             if mdf.empty:
                 continue
             best = mdf.loc[mdf['psnr'].astype(float).idxmax()]
+            # Build config string from hyperparameter columns
+            hp_parts = []
+            for hp in all_hp_names:
+                val = best.get(hp, '')
+                if pd.notna(val) and str(val) != '':
+                    hp_parts.append(f"{hp}={val}")
+            cfg_summary = ", ".join(hp_parts) if hp_parts else "default"
             print(f"\n{mname.upper()}:")
-            print(f"  Config: {best['config']}")
+            print(f"  Config: layers={best['hidden_layers']}, {cfg_summary}")
             print(f"  Scale:  {best['scale']}x")
             print(f"  PSNR:   {best['psnr']} | SSIM: {best['ssim']} | LPIPS: {best['lpips']}")
             print(f"  MAE:    {best['mae']} | RMSE: {best['rmse']} | Error Std: {best['error_std']}")
