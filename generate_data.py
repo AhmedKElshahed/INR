@@ -23,8 +23,9 @@ def generate_data(mesh_path, output_path, num_samples=500000):
 
     print(f"   Original faces: {len(mesh_o3d.triangles)}")
     
-    # Simplify to 50k faces
-    target_faces = 50000
+    # Simplify to 200k faces — enough to preserve fine surface detail
+    # (too aggressive simplification causes "stepped" occupancy labels near the surface)
+    target_faces = 200000
     if len(mesh_o3d.triangles) > target_faces:
         print(f"-> Simplifying to {target_faces} faces...")
         mesh_o3d = mesh_o3d.simplify_quadric_decimation(target_number_of_triangles=target_faces)
@@ -46,19 +47,20 @@ def generate_data(mesh_path, output_path, num_samples=500000):
     mesh.apply_scale(scale)
 
     # 4. Sample Points
-    # Strategy (following Occupancy Networks, Mescheder et al. CVPR 2019):
-    #   50% uniform random in the bounding box
-    #   25% near-surface with tight noise (sigma=0.005) — fine boundary detail
-    #   25% near-surface with loose noise (sigma=0.05)  — broader boundary region
+    # Strategy:
+    #   20% uniform random in the bounding box  — teaches global inside/outside
+    #   40% near-surface tight noise (sigma=0.002) — sharp boundary detail
+    #   40% near-surface loose noise (sigma=0.05)  — broader boundary region
+    # More near-surface weight focuses network capacity on the boundary itself.
     print(f"-> Sampling {num_samples} points...")
-    n_uni   = num_samples // 2
-    n_tight = (num_samples - n_uni) // 2
+    n_uni   = int(num_samples * 0.20)
+    n_tight = int(num_samples * 0.40)
     n_loose = num_samples - n_uni - n_tight
 
     p_uni = np.random.rand(n_uni, 3) * 2 - 1
 
     p_tight, _ = trimesh.sample.sample_surface(mesh, n_tight)
-    p_tight += np.random.normal(0, 0.005, p_tight.shape)
+    p_tight += np.random.normal(0, 0.002, p_tight.shape)
 
     p_loose, _ = trimesh.sample.sample_surface(mesh, n_loose)
     p_loose += np.random.normal(0, 0.05, p_loose.shape)

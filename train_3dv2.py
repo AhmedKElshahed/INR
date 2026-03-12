@@ -54,10 +54,19 @@ def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
 
     outputs = torch.sigmoid(torch.cat(outputs, dim=0)).numpy().reshape(resolution, resolution, resolution)
 
+    # Smooth the volume to reduce high-frequency noise/banding on the extracted surface
+    from scipy.ndimage import gaussian_filter
+    outputs = gaussian_filter(outputs, sigma=0.5)
+
     try:
         verts, faces, normals, values = skimage.measure.marching_cubes(outputs, level=threshold)
         verts = verts / (resolution - 1) * 2 - 1
-        return trimesh.Trimesh(vertices=verts, faces=faces)
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        # Keep only the largest connected component — removes floating artifacts
+        components = mesh.split(only_watertight=False)
+        if len(components) > 1:
+            mesh = max(components, key=lambda m: len(m.faces))
+        return mesh
     except ValueError:
         return None
 
