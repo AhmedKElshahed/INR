@@ -65,14 +65,14 @@ GRID_SEARCH_SPACES = {
 # Used by: train_3d.py
 # ----------------------------------------------------------------------------
 BEST_CONFIGS_3D = {
-    # hidden_features=512, hidden_layers=5 — matches typical paper settings for 3D occupancy
-    # (larger than 2D SR defaults; 3D has a harder boundary-learning task)
-    'siren':   {'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_features': 512, 'hidden_layers': 5},
-    'mfn':     {'input_scale': 10.0,  'alpha': 6.0, 'beta': 1.0, 'hidden_features': 512, 'hidden_layers': 5},
-    'fourier': {'gamma': 10.0, 'hidden_features': 512, 'hidden_layers': 5},
-    'gauss':   {'input_scale': 20.0, 'sigma': 1.0, 'hidden_features': 512, 'hidden_layers': 5},
-    'wire':    {'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_features': 512, 'hidden_layers': 5},
-    'finer':   {'frequency_bands': 16, 'hidden_features': 512, 'hidden_layers': 5},
-    'incode':  {'scale': 50.0, 'hidden_features': 512, 'hidden_layers': 5},
-    'fr':      {'F': 64, 'hidden_features': 512, 'hidden_layers': 5},
+    # 256 hidden features, 4 layers — larger networks overfit more without improving eval IoU.
+    # The ~0.96 eval ceiling is due to noisy binary labels near the surface, not underfitting.
+    'siren':   {'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4},
+    'mfn':     {'input_scale': 10.0,  'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4},
+    'fourier': {'gamma': 10.0, 'hidden_layers': 4},
+    'gauss':   {'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4},
+    'wire':    {'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4},
+    'finer':   {'frequency_bands': 16, 'hidden_layers': 4},
+    'incode':  {'scale': 50.0, 'hidden_layers': 4},
+    'fr':      {'F': 64, 'hidden_layers': 4},
 }
