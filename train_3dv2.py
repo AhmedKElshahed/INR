@@ -54,9 +54,9 @@ def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
 
     outputs = torch.sigmoid(torch.cat(outputs, dim=0)).numpy().reshape(resolution, resolution, resolution)
 
-    # Smooth the volume to reduce high-frequency noise/banding on the extracted surface
+    # Smooth the volume to reduce marching-cubes staircase artifacts
     from scipy.ndimage import gaussian_filter
-    outputs = gaussian_filter(outputs, sigma=0.5)
+    outputs = gaussian_filter(outputs, sigma=1.0)
 
     try:
         verts, faces, normals, values = skimage.measure.marching_cubes(outputs, level=threshold)
@@ -66,6 +66,8 @@ def extract_mesh(model, resolution=128, threshold=0.5, device='cuda'):
         components = mesh.split(only_watertight=False)
         if len(components) > 1:
             mesh = max(components, key=lambda m: len(m.faces))
+        # Laplacian smoothing to remove residual voxel-stepping on the surface
+        trimesh.smoothing.filter_laplacian(mesh, iterations=3)
         return mesh
     except ValueError:
         return None
@@ -274,7 +276,7 @@ if __name__ == "__main__":
     parser.add_argument("--mesh",   type=str,   default="nefertiti.obj",
                         help="Input .obj mesh file")
     parser.add_argument("--epochs", type=int,   default=500,
-                        help="Training epochs per model (500 recommended for IoU > 0.99)")
+                        help="Training epochs per model (500+ recommended with near-surface-heavy dataset)")
     parser.add_argument("--lr",     type=float, default=1e-4,
                         help="Initial learning rate (cosine-annealed to lr*0.01)")
     parser.add_argument("--res",    type=int,   default=None,
