@@ -145,7 +145,7 @@ def compute_eval_iou(model, val_loader, device):
 # ============================================================================
 
 def train_occupancy(model_name, dataset_path, mesh_path=None,
-                    epochs=500, batch_size=4096, lr=1e-4):
+                    epochs=500, batch_size=4096, lr=1e-4, args_res=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     cfg = BEST_CONFIGS_3D[model_name].copy()
@@ -169,7 +169,7 @@ def train_occupancy(model_name, dataset_path, mesh_path=None,
 
     # ---- Optimizer + cosine annealing LR schedule ----
     effective_lr = MODEL_LR_OVERRIDES.get(model_name, lr)
-    optimizer = torch.optim.Adam(model.parameters(), lr=effective_lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=effective_lr, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=epochs, eta_min=effective_lr * 0.01
     )
@@ -229,7 +229,7 @@ def train_occupancy(model_name, dataset_path, mesh_path=None,
     print(f"[{model_name.upper()}] Eval IoU: {eval_iou:.4f}")
 
     # ---- Mesh extraction (Marching Cubes) ----
-    res = 128 if torch.cuda.is_available() else 64
+    res = args_res if args_res is not None else (256 if torch.cuda.is_available() else 64)
     print(f"[{model_name.upper()}] Extracting mesh (resolution={res})...")
     os.makedirs("outputs_3d", exist_ok=True)
     mesh_stem = os.path.basename(dataset_path).replace("_dataset.npz", "")
@@ -268,6 +268,8 @@ if __name__ == "__main__":
                         help="Training epochs per model (500 recommended for IoU > 0.99)")
     parser.add_argument("--lr",     type=float, default=1e-4,
                         help="Initial learning rate (cosine-annealed to lr*0.01)")
+    parser.add_argument("--res",    type=int,   default=None,
+                        help="Marching-cubes resolution (default: 256 on GPU, 64 on CPU)")
     args = parser.parse_args()
 
     base_name    = os.path.splitext(args.mesh)[0]
@@ -310,6 +312,7 @@ if __name__ == "__main__":
                 epochs=args.epochs,
                 batch_size=bs,
                 lr=args.lr,
+                args_res=args.res,
             )
 
             with open(csv_file, 'a', newline='') as f:
