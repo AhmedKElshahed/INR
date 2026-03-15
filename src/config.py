@@ -65,14 +65,15 @@ GRID_SEARCH_SPACES = {
 # Used by: train_3d.py
 # ----------------------------------------------------------------------------
 BEST_CONFIGS_3D = {
-    # 256 hidden features, 4 layers — larger networks overfit more without improving eval IoU.
-    # The ~0.96 eval ceiling is due to noisy binary labels near the surface, not underfitting.
+    # 256 hidden features, 4 layers.
+    # NOTE on Fourier: gamma = number of random frequencies (NOT a scale). gamma=10 → fdim=20, catastrophic failure.
+    # NOTE on FINER: frequency_bands=6 converges slower than 16 on 3D (eval IoU 0.88 vs 0.95). Keep 16.
     'siren':   {'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4},
     'mfn':     {'input_scale': 10.0,  'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4},
-    'fourier': {'gamma': 10.0, 'hidden_layers': 4},
+    'fourier': {'gamma': 256, 'hidden_layers': 4},   # gamma = num frequencies; 256 → fdim=512 (was 10 → fdim=20, broken)
     'gauss':   {'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4},
     'wire':    {'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4},
-    'finer':   {'frequency_bands': 6, 'hidden_layers': 4},   # 16 froze at train IoU 0.958; 3D is lower-freq than 2D
+    'finer':   {'frequency_bands': 16, 'hidden_layers': 4},  # 6 gave 0.88, 16 gives 0.95 — keep higher init freq
     'incode':  {'scale': 50.0, 'hidden_layers': 4},
     'fr':      {'F': 64, 'hidden_layers': 4},
 }

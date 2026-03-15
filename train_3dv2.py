@@ -19,8 +19,8 @@ from src.config import BEST_CONFIGS_3D
 
 # Some activations have smaller or less-stable gradients; override LR for stable 3D convergence.
 MODEL_LR_OVERRIDES = {
-    'gauss': 3e-4,   # 1e-3 caused erratic training on 3D near-surface-heavy data
-    'mfn':   3e-4,   # plateaus at train IoU 0.91 at default 1e-4; needs higher LR
+    'gauss': 1e-3,   # Gaussian activations need high LR; 3e-4 converges to 0.65 only, 1e-3 reaches 0.85
+    'mfn':   3e-4,   # plateaus at train IoU 0.91 at default 1e-4; 3e-4 reaches 0.93
 }
 
 # ============================================================================
