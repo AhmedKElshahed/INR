@@ -17,10 +17,10 @@ from src.models import create_model
 from src.data_3d import OccupancyDataset
 from src.config import BEST_CONFIGS_3D
 
-# Gauss activations have ~400x smaller gradients than sinusoidal activations,
-# so it needs a proportionally higher LR to converge in a reasonable epoch count.
+# Some activations have smaller or less-stable gradients; override LR for stable 3D convergence.
 MODEL_LR_OVERRIDES = {
-    'gauss': 1e-3,
+    'gauss': 3e-4,   # 1e-3 caused erratic training on 3D near-surface-heavy data
+    'mfn':   3e-4,   # plateaus at train IoU 0.91 at default 1e-4; needs higher LR
 }
 
 # ============================================================================

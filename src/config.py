@@ -72,7 +72,7 @@ BEST_CONFIGS_3D = {
     'fourier': {'gamma': 10.0, 'hidden_layers': 4},
     'gauss':   {'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4},
     'wire':    {'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4},
-    'finer':   {'frequency_bands': 16, 'hidden_layers': 4},
+    'finer':   {'frequency_bands': 6, 'hidden_layers': 4},   # 16 froze at train IoU 0.958; 3D is lower-freq than 2D
     'incode':  {'scale': 50.0, 'hidden_layers': 4},
     'fr':      {'F': 64, 'hidden_layers': 4},
 }
