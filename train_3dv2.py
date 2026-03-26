@@ -281,6 +281,10 @@ if __name__ == "__main__":
                         help="Initial learning rate (cosine-annealed to lr*0.01)")
     parser.add_argument("--res",    type=int,   default=None,
                         help="Marching-cubes resolution (default: 256 on GPU, 64 on CPU)")
+    all_models = ["siren", "wire", "finer", "gauss", "mfn", "fourier", "incode", "fr"]
+    parser.add_argument("--models", type=str,   nargs="+", default=all_models,
+                        choices=all_models, metavar="MODEL",
+                        help=f"Models to run (default: all). Choices: {all_models}")
     args = parser.parse_args()
 
     base_name    = os.path.splitext(args.mesh)[0]
@@ -291,7 +295,7 @@ if __name__ == "__main__":
         print(f"  Run: python generate_data.py --mesh {args.mesh}")
         exit(1)
 
-    models_to_run = ["siren", "wire", "finer", "gauss", "mfn", "fourier", "incode", "fr"]
+    models_to_run = args.models
 
     csv_file = 'results_3d_comparison.csv'
     write_header = not os.path.exists(csv_file)
