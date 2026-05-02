@@ -1,0 +1,19 @@
+# Checkpoints
+checkpoints_*/
+
+# Generated outputs
+outputs_2d/
+outputs_3d/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+src/__pycache__/
+src/models/__pycache__/
+
+# Claude memory
+.claude/
+
+# Jupyter
+.ipynb_checkpoints/

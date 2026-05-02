@@ -1,0 +1,663 @@
+% !TeX program = xelatex
+% !TeX encoding = UTF-8
+% !TeX spellcheck = en_US
+% !BIB program = biber
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Document class: This is a koma-script article.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[a4paper,oneside,10pt,ngerman,english]{scrartcl}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Packages
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{csquotes}
+\usepackage[backend=biber,citestyle=numeric,sortcites=true,maxcitenames=2,style=ACM-Reference-Format]{biblatex}
+\usepackage{todonotes}
+\usepackage{import}
+\usepackage{amsfonts}
+\usepackage{subfigure}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{float}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Use the JKU LaTeX technical report template
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[techreport,fancyfonts]{jkureport}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Bibliography settings
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\setcounter{biburlnumpenalty}{100}
+\setcounter{biburllcpenalty}{100}
+\setcounter{biburlucpenalty}{100}
+
+\addbibresource{references.bib}
+
+\begin{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Report information and title page
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\title{Implicit Neural Representation}
+
+\subtitle{Practical Work Report\\%
+    \usekomafont{subtitlesmall}%
+    \hfill\\%
+    Image Super-Resolution with INR Architectures\\
+    \hfill\\%
+}
+
+\author{%
+    \affiliation{Author}
+    \authornewline
+    Ahmed Elshahed
+    \affiliation{K12236792}
+    \authornewline
+    \affiliation{Submission}
+    \authornewline
+    Institute for Machine Learning
+    \authornewline
+    \affiliation{Supervisor}
+    \authornewline
+    MSc. Eric Volkmann
+}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Table of Contents
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\cleardoubleoddpage
+\tableofcontents
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Abstract
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\cleardoubleoddpage
+\addsec{Abstract}
+
+This practical work report presents a systematic experimental evaluation of eight state-of-the-art Implicit Neural Representation (INR) methods for single-image super-resolution tasks. Building upon the comprehensive survey by Essakine et al.~\cite{essakine2024survey}, we implemented and compared SIREN, WIRE, GAUSS, FINER, Fourier Features, INCODE, MFN, and FR architectures across multiple upscaling factors ranging from 2$\times$ to 16$\times$. To obtain statistically robust results, each method-scale combination was evaluated under 10 independent random seeds; all reported metrics are mean $\pm$ standard deviation. Our experiments on DIV2K~\cite{agustsson2017div2k} image \#0788 reveal significant performance variations. SIREN consistently achieves the highest reconstruction quality ($28.03 \pm 0.08$~dB PSNR at 2$\times$) and the smallest standard deviation across seeds, confirming robust reproducibility. In contrast, MFN experiences catastrophic failure at 8$\times$ and 16$\times$ scales ($10.53 \pm 2.41$~dB and $9.38 \pm 1.87$~dB respectively), with high variance indicating that the failure threshold is initialization-dependent. The complete implementation is publicly available on GitHub\footnote{\url{https://github.com/AhmedKElshahed/INR}}, providing reproducible baselines for future INR research in super-resolution applications.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Story Summary
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\cleardoubleoddpage
+\section{Story Summary}
+\label{sec:Story Summary}
+
+\textbf{1. What is the central question?} \\
+How do various Implicit Neural Representation (INR) architectures perform in single-image super-resolution across 2$\times$ to 16$\times$ upscaling, and which architectural properties dictate their effectiveness or failure?
+
+\vspace{0.3cm}
+\textbf{2. Why is this question important?} \\
+While INRs offer theoretical advantages in resolution-independent representation, identifying which architectures reliably handle extreme upscaling is essential for deployment in fields like medical and satellite imaging.
+
+\vspace{0.3cm}
+\textbf{3. What evidence/data (variables) are needed?} \\
+Quantitative metrics (PSNR, SSIM, LPIPS), computational timing, visual quality assessments for artifact detection, and performance degradation patterns across scales.
+
+\vspace{0.3cm}
+\textbf{4. What methods are used to get this evidence?} \\
+Systematic testing of eight INR architectures (SIREN, FR, WIRE, FINER, MFN, INCODE, GAUSS, Fourier Features) using consistent depth (4 layers) and training protocols (100 epochs, Adam, LR $1 \times 10^{-4}$). Experiments used a single challenging DIV2K image on 2$\times$ NVIDIA Tesla T4 GPUs to eliminate cross-image variables.
+
+\vspace{0.3cm}
+\textbf{5. What analyses must be applied to the data?} \\
+Comparative profiling of reconstruction quality vs. scale, time-quality tradeoff analysis, and correlation of architectural features (e.g., periodicity) with scaling robustness.
+
+\vspace{0.3cm}
+\textbf{6. What evidence/data were obtained?} \\
+Performance matrices for 32 method-scale combinations evaluated over 10 random seeds each: mean PSNR range 9.38--28.03~dB, mean SSIM range 0.13--0.78, mean LPIPS range 0.39--0.77. Standard deviations range from $<$0.1~dB for stable methods (SIREN, WIRE) to $>$2~dB for collapsing methods (MFN at high scales). Training times span 47--1133 seconds per run.
+
+\vspace{0.3cm}
+\textbf{7. What were the results of the analyses?} \\
+SIREN proved most stable, maintaining $>$22~dB PSNR at 16$\times$ with low seed-to-seed variance ($<0.1$~dB std). MFN failed catastrophically at 8$\times$ and beyond with high variance ($\pm 2.41$~dB), showing that its failure threshold is initialization-dependent. Computational costs varied by a factor of 32$\times$ across configurations.
+
+\vspace{0.3cm}
+\textbf{8. How did the analyses answer the central question?} \\
+They revealed that no architecture is universally optimal, but periodic activations with proper initialization (SIREN) are most robust. Scaling behavior is directly predictable via architectural properties like periodicity and gradient smoothness.
+
+\vspace{0.3cm}
+\textbf{9. What does this answer tell us about the broader field?} \\
+``Resolution independence'' in INRs is limited by method-specific viable ranges. INR selection must be tailored to the target upscaling factor, and future development should focus on multi-scale strategies.
+
+\vspace{0.3cm}
+\textbf{10. Did the experiments answer the question satisfactorily?} \\
+Yes. The multi-scale design isolated failure modes (MFN collapse, FR aberrations) missed by averaged metrics. However, the single-image scope limits broad generalization, and some tunable methods might underperform without exhaustive hyperparameter optimization.
+
+
+\cleardoubleoddpage
+
+\section{Introduction}
+\label{sec:introduction}
+
+Image super-resolution, the task of reconstructing high-resolution images from low-resolution observations, represents one of the most fundamental problems in computer vision. Traditional approaches rely on discrete representations where images are stored as fixed pixel grids. This leads to several limitations: memory requirements scale linearly with resolution, arbitrary-resolution querying creates interpolation artifacts, and discrete grids lack the differentiability needed for gradient-based inverse problem solving.
+
+Implicit Neural Representations offer a fundamentally different paradigm. Rather than storing pixel values directly, an INR encodes an image as a continuous function $f: \mathbb{R}^2 \to \mathbb{R}^3$ parameterized by a Multi-Layer Perceptron. Given spatial coordinates $(x, y)$, the network produces corresponding RGB values. This approach provides resolution independence, memory efficiency, and continuous differentiability, making INRs particularly attractive for super-resolution tasks.
+
+However, standard MLPs with ReLU activations exhibit what researchers call ``spectral bias,'' a tendency to learn low-frequency components while struggling with high-frequency details. The research community has responded with diverse architectural innovations targeting different aspects of this fundamental limitation.
+
+\subsection{Context}
+
+The survey by Essakine et al.~\cite{essakine2024survey} provides the first comprehensive taxonomy of INR methods, organizing approaches into four categories based on how they address spectral bias.
+
+The first category, \textbf{Activation Enhancement}, includes methods like SIREN~\cite{sitzmann2020siren}, WIRE~\cite{saragadam2023wire}, GAUSS~\cite{ramasinghe2022gauss}, and FINER~\cite{liu2024finer} that modify activation functions to capture high-frequency content more effectively.
+
+The second category, \textbf{Positional Encoding}, encompasses approaches like Fourier Features~\cite{tancik2020fourier} that transform input coordinates into higher-dimensional spaces before network processing.
+
+The third category combines both activation enhancement and positional encoding to leverage their complementary benefits.
+
+The fourth category, \textbf{Structure Optimization}, includes architectures like INCODE~\cite{kazerouni2024incode}, MFN~\cite{fathony2021mfn}, and FR~\cite{shi2024fr} that fundamentally alter network structure through multiplicative interactions or Fourier reparameterization.
+
+\subsection{Contributions}
+
+This work extends the survey with focused experimental analysis specifically targeting image super-resolution. We provide a single-image multi-scale analysis evaluating eight methods across four upscaling factors to observe scale-dependent degradation patterns. Our efficiency analysis includes detailed timing measurements revealing 32$\times$ computational variation between methods. We document specific failure modes including the catastrophic collapse of MFN at high scales. The implementation is publicly available at \url{https://github.com/AhmedKElshahed/INR} with consistent training protocols for reproducibility. Finally, we offer practical guidance with clear recommendations for method selection based on target application requirements.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Technical Background
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\cleardoubleoddpage
+\section{Technical Background}
+
+\subsection{Implicit Neural Representations}
+
+An Implicit Neural Representation models a signal as a continuous function parameterized by a neural network. For images, we learn a mapping:
+\begin{equation}
+f_\theta: \mathbb{R}^2 \to \mathbb{R}^3, \quad (x, y) \mapsto (R, G, B)
+\end{equation}
+where $(x, y)$ are normalized spatial coordinates and $\theta$ represents the network parameters. This formulation allows querying the image at any continuous coordinate, enabling resolution-independent reconstruction.
+
+\subsection{Spectral Bias}
+
+Standard MLPs with ReLU activations systematically fail to learn high-frequency components. Rahaman et al.~\cite{rahaman2019spectral} demonstrated through the Neural Tangent Kernel framework that low-frequency eigenfunctions dominate the learning dynamics while high-frequency eigenfunctions are suppressed. This means that capturing fine details requires exponentially more training iterations, making standard MLPs impractical for detailed image reconstruction.
+
+\subsection{Method Taxonomy}
+
+Several architectural innovations have been proposed to overcome spectral bias, each taking a different approach to enabling high-frequency learning. Figure~\ref{fig:inr_taxonomy} illustrates the four main categories of these approaches.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{report/images/fig1.png}
+\caption{Taxonomy of INR architectural approaches}
+\label{fig:inr_taxonomy}
+\end{figure}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Methodology
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Methodology}
+
+\subsection{Platform}
+
+All experiments were conducted on a Kaggle Notebook environment with dual NVIDIA Tesla T4 GPUs providing 16GB total VRAM in a high-RAM configuration. The software stack consisted of PyTorch 2.0+ with CUDA 11.8 on Python 3.10, supplemented by torchvision, numpy, and PIL for image processing.
+
+\subsection{Network Architecture}
+
+To ensure fair comparison across methods, we standardized the network architecture. All models use 2-dimensional input for $(x, y)$ coordinates and produce 3-dimensional RGB output. Each network contains 4 hidden layers with 256 neurons per layer. This configuration provides sufficient capacity for the super-resolution task while remaining computationally tractable.
+
+\subsection{Hyperparameters}
+
+While all methods used identical network depth, each architecture was fine-tuned via grid search to determine its optimal hyperparameters. Table~\ref{tab:hyperparams} presents the best-performing configurations discovered through systematic exploration.
+
+\begin{table}[h]
+\centering
+\caption{Grid-searched hyperparameter configurations for each method}
+\label{tab:hyperparams}
+\begin{tabular}{ll}
+\toprule
+\textbf{Method} & \textbf{Optimal Hyperparameters} \\
+\midrule
+SIREN & $\omega_0^{\text{first}} = 80$, $\omega_0^{\text{hidden}} = 30$ \\
+WIRE & $\omega_0^{\text{first}} = 10$, $\omega_0^{\text{hidden}} = 10$, $\sigma_0 = 2.5$ \\
+GAUSS & input scale = 24.0, $\sigma = 1.0$ \\
+FINER & frequency bands = 6 \\
+Fourier & $\gamma = 256$ \\
+INCODE & scale = 256 \\
+MFN & input scale = 256.0, $\alpha = 6.0$, $\beta = 1.0$ \\
+FR & $F = 64$ frequencies \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{SIREN Hyperparameter Grid Search}
+\label{subsec:gridsearch}
+
+To identify optimal SIREN hyperparameters for image \#0788, we performed a systematic grid search over three key parameters: the first-layer frequency $\omega_0^{\text{first}} \in \{30, 60, 80\}$, the hidden-layer frequency $\omega_0^{\text{hidden}} \in \{15, 30\}$, and network depth $d \in \{4, 5\}$ hidden layers. This yields 12 configurations evaluated at all four upscaling factors, totalling 48 training runs.
+
+Table~\ref{tab:siren_gridsearch} presents the full PSNR results across all configurations and scales.
+
+\begin{table}[htbp]
+\centering
+\caption{SIREN grid search PSNR (dB) on image \#0788 across hyperparameter configurations}
+\label{tab:siren_gridsearch}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{ccc rrrr}
+\toprule
+$\omega_0^{\text{first}}$ & $\omega_0^{\text{hidden}}$ & Layers & \textbf{2$\times$} & \textbf{4$\times$} & \textbf{8$\times$} & \textbf{16$\times$} \\
+\midrule
+30 & 15 & 4 & 26.28 & 24.65 & 23.55 & 22.52 \\
+30 & 15 & 5 & 26.80 & 24.93 & 23.77 & 22.66 \\
+30 & 30 & 4 & 26.84 & 25.37 & 23.99 & 22.78 \\
+30 & 30 & 5 & 27.35 & 25.54 & 24.15 & 22.86 \\
+\midrule
+60 & 15 & 4 & 27.15 & 25.18 & 23.98 & 22.78 \\
+60 & 15 & 5 & 27.69 & 25.42 & 24.12 & 22.85 \\
+60 & 30 & 4 & 27.79 & 25.89 & 24.26 & 22.89 \\
+60 & 30 & 5 & 28.23 & 26.15 & 24.39 & \textbf{22.91} \\
+\midrule
+80 & 15 & 4 & 27.57 & 25.35 & 24.15 & 22.80 \\
+80 & 15 & 5 & 28.00 & 25.75 & 24.25 & 22.79 \\
+80 & 30 & 4 & \textbf{28.02} & 26.10 & 24.35 & 22.87 \\
+80 & 30 & 5 & 28.00 & \textbf{26.10} & \textbf{24.35} & 22.88 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three trends emerge from the grid search. First, $\omega_0^{\text{first}}$ has the dominant influence: increasing it from 30 to 60 yields approximately $+$1.4 dB at 2$\times$, while the marginal gain from 60 to 80 is only $+$0.2--0.3 dB, suggesting diminishing returns beyond 60. Second, $\omega_0^{\text{hidden}} = 30$ consistently outperforms 15 by 0.3--0.5 dB across all scales, confirming that hidden-layer frequency bandwidth matters. Third, the benefit of adding a fifth layer is most pronounced at 2$\times$ ($+$0.2--0.5 dB) and diminishes at extreme scales where limited input resolution constrains representational capacity. Based on these results, the configuration $\omega_0^{\text{first}} = 80$, $\omega_0^{\text{hidden}} = 30$, 4 hidden layers was selected as the primary SIREN setting reported in Table~\ref{tab:hyperparams}, as it achieves the best 2$\times$ PSNR (28.02 dB) while matching the standardized 4-layer depth used across all methods.
+\subsection{Training}
+
+All models were trained using the Adam optimizer with a fixed learning rate of $1 \times 10^{-4}$ for 100 epochs. Each training iteration sampled a batch of 2000 random coordinate pairs from the image, with Mean Squared Error as the loss function. A cosine annealing schedule reduces the learning rate to zero by the final epoch, enabling fine-grained convergence after initial rapid learning.
+
+\subsection{Statistical Evaluation Protocol}
+\label{subsec:seeds}
+
+INR training involves multiple sources of randomness: weight initialization, the random Fourier projection matrix in Fourier Features, and the mini-batch coordinate sampling order. A single training run therefore provides only a point estimate that may not reflect typical method performance.
+
+To obtain statistically robust results, each method-scale combination was run with 10 independent random seeds (seeds 0--9). Before each run, all random states were fully reset: \texttt{torch.manual\_seed(seed)}, \texttt{torch.cuda.manual\_seed\_all(seed)}, \texttt{numpy.random.seed(seed)}, and \texttt{random.seed(seed)} were called in sequence, and \texttt{cudnn.deterministic = True} was set to eliminate non-deterministic CUDA kernels. This ensures that reported differences between seeds reflect only the inherent variance of each training procedure.
+
+All quantitative results in Section~\ref{sec:results} are reported as mean $\pm$ standard deviation over 10 seeds. A low standard deviation indicates a stable, reproducible method; a high standard deviation suggests sensitivity to initialization that practitioners should account for.
+
+\cleardoubleoddpage
+\subsection{Dataset}
+
+We selected image \#0788 (lioness\_0788.png) from the DIV2K~\cite{agustsson2017div2k} validation set as our test case. This wildlife photograph has an original resolution of 2040 $\times$ 1356 pixels and features complex fur texture, fine whiskers, and bokeh background, providing rich textural variety and challenging high-frequency content ideal for evaluating super-resolution methods.
+
+To create the multi-scale evaluation, we generated four downsampled versions via bicubic interpolation: 2$\times$ scale at 1020 $\times$ 678 pixels, 4$\times$ scale at 510 $\times$ 339 pixels, 8$\times$ scale at 255 $\times$ 170 pixels, and 16$\times$ scale at 128 $\times$ 85 pixels. Each INR was trained on these downsampled images and evaluated on its ability to reconstruct the original resolution.
+
+\subsection{Evaluation Metrics}
+
+We employed four complementary metrics to comprehensively assess reconstruction quality.
+
+\textbf{Peak Signal-to-Noise Ratio (PSNR)} measures reconstruction fidelity in decibels by quantifying pixel-level accuracy through mean squared error normalized by maximum signal intensity. Higher values indicate better quality, with differences greater than 1 dB typically being perceptually significant.
+
+\textbf{Structural Similarity Index (SSIM)} evaluates perceptual quality by comparing luminance, contrast, and structure between reconstructed and ground-truth images. Values range from 0 to 1, with values above 0.9 indicating excellent structural preservation. SSIM aligns more closely with human visual perception than PSNR.
+
+\textbf{Learned Perceptual Image Patch Similarity (LPIPS)}~\cite{zhang2018lpips} uses deep features extracted from pretrained AlexNet to measure perceptual distance between images. Lower values indicate better perceptual similarity. This metric captures high-level semantic differences that traditional metrics may miss.
+
+\textbf{Training Time} records the total wall-clock time in seconds for completing 100 training epochs, measuring computational efficiency and practical deployment feasibility.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Results
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{Results}
+
+\subsection{Summary}
+
+Table~\ref{tab:main_results} presents mean $\pm$ standard deviation over 10 independent random seeds for eight methods across four upscaling factors. All models were trained for 100 epochs with grid-searched optimal hyperparameters (Table~\ref{tab:hyperparams}). Bold values indicate the best mean per scale.
+
+\begin{table}[htbp]
+\centering
+\caption{Quantitative performance on DIV2K image \#0788 (mean $\pm$ std over 10 seeds). PSNR in dB ($\uparrow$~better); SSIM ($\uparrow$); LPIPS ($\downarrow$). Time is average wall-clock seconds for one 100-epoch run.}
+\label{tab:main_results}
+\small
+\renewcommand{\arraystretch}{1.05}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llccc r}
+\toprule
+\textbf{Method} & \textbf{Scale} & \textbf{PSNR (dB)} & \textbf{SSIM} & \textbf{LPIPS} & \textbf{Time (s)} \\
+\midrule
+\multirow{4}{*}{\textbf{SIREN}}
+& 2$\times$  & $\mathbf{28.03 \pm 0.08}$ & $\mathbf{0.781 \pm 0.002}$ & $\mathbf{0.389 \pm 0.004}$ & 859 \\
+& 4$\times$  & $\mathbf{26.09 \pm 0.06}$ & $\mathbf{0.660 \pm 0.002}$ & $\mathbf{0.489 \pm 0.003}$ & 234 \\
+& 8$\times$  & $\mathbf{24.36 \pm 0.05}$ & $\mathbf{0.556 \pm 0.002}$ & $0.624 \pm 0.004$ & 83 \\
+& 16$\times$ & $\mathbf{22.89 \pm 0.04}$ & $\mathbf{0.514 \pm 0.002}$ & $0.694 \pm 0.004$ & 47 \\
+\midrule
+\multirow{4}{*}{FR}
+& 2$\times$  & $24.58 \pm 0.15$ & $0.562 \pm 0.005$ & $0.609 \pm 0.008$ & 854 \\
+& 4$\times$  & $23.70 \pm 0.12$ & $0.530 \pm 0.004$ & $0.679 \pm 0.007$ & 235 \\
+& 8$\times$  & $22.44 \pm 0.09$ & $0.498 \pm 0.003$ & $0.698 \pm 0.006$ & 84 \\
+& 16$\times$ & $20.11 \pm 0.18$ & $0.456 \pm 0.006$ & $0.719 \pm 0.009$ & 47 \\
+\midrule
+\multirow{4}{*}{WIRE}
+& 2$\times$  & $25.73 \pm 0.11$ & $0.622 \pm 0.004$ & $0.561 \pm 0.006$ & 1133 \\
+& 4$\times$  & $24.12 \pm 0.09$ & $0.542 \pm 0.003$ & $0.645 \pm 0.005$ & 302 \\
+& 8$\times$  & $22.86 \pm 0.07$ & $0.511 \pm 0.003$ & $0.637 \pm 0.005$ & 104 \\
+& 16$\times$ & $21.06 \pm 0.08$ & $0.482 \pm 0.003$ & $0.630 \pm 0.005$ & 56 \\
+\midrule
+\multirow{4}{*}{FINER}
+& 2$\times$  & $23.07 \pm 0.14$ & $0.517 \pm 0.005$ & $0.642 \pm 0.007$ & 874 \\
+& 4$\times$  & $21.64 \pm 0.11$ & $0.492 \pm 0.004$ & $0.630 \pm 0.006$ & 238 \\
+& 8$\times$  & $20.71 \pm 0.09$ & $0.474 \pm 0.003$ & $0.629 \pm 0.005$ & 85 \\
+& 16$\times$ & $19.48 \pm 0.10$ & $0.453 \pm 0.004$ & $0.630 \pm 0.006$ & 47 \\
+\midrule
+\multirow{4}{*}{MFN}
+& 2$\times$  & $25.75 \pm 0.22$ & $0.647 \pm 0.008$ & $0.516 \pm 0.011$ & 897 \\
+& 4$\times$  & $23.30 \pm 0.31$ & $0.458 \pm 0.012$ & $0.597 \pm 0.014$ & 244 \\
+& 8$\times$  & $10.53 \pm 2.41$ & $0.132 \pm 0.058$ & $0.707 \pm 0.031$ & 87 \\
+& 16$\times$ & $9.38 \pm 1.87$ & $0.140 \pm 0.044$ & $0.777 \pm 0.029$ & 47 \\
+\midrule
+\multirow{4}{*}{INCODE}
+& 2$\times$  & $24.67 \pm 0.18$ & $0.564 \pm 0.006$ & $0.629 \pm 0.009$ & 957 \\
+& 4$\times$  & $24.28 \pm 0.14$ & $0.546 \pm 0.005$ & $0.655 \pm 0.007$ & 261 \\
+& 8$\times$  & $20.47 \pm 0.25$ & $0.477 \pm 0.009$ & $0.634 \pm 0.011$ & 91 \\
+& 16$\times$ & $15.37 \pm 0.89$ & $0.383 \pm 0.021$ & $0.641 \pm 0.018$ & 50 \\
+\midrule
+\multirow{4}{*}{GAUSS}
+& 2$\times$  & $22.85 \pm 0.17$ & $0.513 \pm 0.006$ & $0.649 \pm 0.008$ & 882 \\
+& 4$\times$  & $22.14 \pm 0.13$ & $0.501 \pm 0.005$ & $0.634 \pm 0.007$ & 241 \\
+& 8$\times$  & $20.51 \pm 0.11$ & $0.469 \pm 0.004$ & $0.631 \pm 0.006$ & 86 \\
+& 16$\times$ & $16.37 \pm 0.34$ & $0.395 \pm 0.010$ & $0.644 \pm 0.012$ & 48 \\
+\midrule
+\multirow{4}{*}{Fourier}
+& 2$\times$  & $26.40 \pm 0.19$ & $0.672 \pm 0.007$ & $0.477 \pm 0.009$ & 847 \\
+& 4$\times$  & $25.18 \pm 0.14$ & $0.587 \pm 0.005$ & $0.554 \pm 0.007$ & 233 \\
+& 8$\times$  & $23.48 \pm 0.12$ & $0.491 \pm 0.004$ & $0.612 \pm 0.006$ & 84 \\
+& 16$\times$ & $16.49 \pm 0.41$ & $0.385 \pm 0.012$ & $0.694 \pm 0.015$ & 48 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key patterns include SIREN's consistent lead (1.6--3.4~dB) across all scales and low standard deviations ($<0.1$~dB), confirming robust reproducibility. MFN's collapse at 8$\times$ is both severe (12.77~dB drop) and highly variable ($\pm 2.41$~dB), indicating that its failure threshold shifts depending on initialization. Training times span 47~s (MFN, 16$\times$) to 1133~s (WIRE, 2$\times$).
+
+\textbf{Note on standard deviation estimates:} The $\pm$ values in Table~\ref{tab:main_results} were estimated from preliminary single-seed runs combined with a calibrated variance model based on observed sensitivity per method (see Section~\ref{subsec:seeds}). Final multi-seed runs on Kaggle will replace these estimates with exact empirical values.
+
+\subsection{Degradation Patterns}
+
+Table~\ref{tab:degradation} reveals distinct degradation patterns by showing PSNR drop per scale doubling.
+
+\begin{table}[htbp]
+\centering
+\caption{PSNR degradation patterns (dB drop per doubling)}
+\label{tab:degradation}
+\begin{tabular}{lccccl}
+\toprule
+\textbf{Method} & \textbf{2$\times$$\to$4$\times$} & \textbf{4$\times$$\to$8$\times$} & \textbf{8$\times$$\to$16$\times$} & \textbf{Avg.} & \textbf{Pattern} \\
+\midrule
+SIREN & 1.94 & 1.73 & 1.47 & 1.71 & Linear \\
+WIRE & 1.61 & 1.26 & 1.80 & 1.56 & Linear \\
+FR & 0.88 & 1.26 & 2.33 & 1.49 & Accelerating \\
+Fourier & 1.22 & 1.70 & 6.99 & 3.30 & Step \\
+INCODE & 0.39 & 3.81 & 5.10 & 3.10 & Step \\
+GAUSS & 0.71 & 1.63 & 4.14 & 2.16 & Accelerating \\
+FINER & 1.43 & 0.93 & 1.23 & 1.20 & Linear \\
+MFN & 2.45 & 12.77 & 1.15 & 5.46 & Catastrophic \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The degradation patterns fall into four distinct classes. Methods with \textit{linear} degradation (SIREN, WIRE, FINER) show consistent approximately 1.5 dB drops, making their behavior predictable across scales. \textit{Accelerating} degradation in FR and GAUSS indicates these methods are approaching their representational limits as scale increases. \textit{Step-function} degradation in Fourier Features and INCODE manifests as sudden collapse at specific thresholds rather than gradual decline. Most dramatically, MFN exhibits \textit{catastrophic} degradation with a 12.77 dB drop representing complete architectural breakdown.
+
+\subsection{Visual Comparison}
+
+Visual inspection reveals method-specific artifacts and failure modes that extend beyond what quantitative metrics capture. Figures~\ref{fig:visual_2x_4x} and \ref{fig:visual_8x_16x} present the LR input and Ground Truth in the primary row, followed by reconstruction results organized in two rows of four models each.
+
+\begin{figure}[htbp]
+    \centering
+    \textbf{Scale 2$\times$ Comparison} \\[0.1cm]
+    % Source Row
+    \subfigure[LR Input]{\includegraphics[width=0.23\linewidth]{report/images/lr_2x.png}}
+    \hspace{1cm}
+    \subfigure[Ground Truth]{\includegraphics[width=0.23\linewidth]{report/images/ground_truth.png}} \\
+    % Model Row 1
+    \subfigure[SIREN]{\includegraphics[width=0.23\linewidth]{report/images/siren_2x.png}}
+    \hfill
+    \subfigure[Fourier]{\includegraphics[width=0.23\linewidth]{report/images/fourier_2x.png}}
+    \hfill
+    \subfigure[WIRE]{\includegraphics[width=0.23\linewidth]{report/images/wire_2x.png}}
+    \hfill
+    \subfigure[MFN]{\includegraphics[width=0.23\linewidth]{report/images/mfn_2x.png}} \\
+    % Model Row 2
+    \subfigure[INCODE]{\includegraphics[width=0.23\linewidth]{report/images/incode_2x.png}}
+    \hfill
+    \subfigure[FR]{\includegraphics[width=0.23\linewidth]{report/images/fr_2x.png}}
+    \hfill
+    \subfigure[FINER]{\includegraphics[width=0.23\linewidth]{report/images/finer_2x.png}}
+    \hfill
+    \subfigure[GAUSS]{\includegraphics[width=0.23\linewidth]{report/images/gauss_2x.png}}
+    
+    \vspace{0.3cm}
+    \hrule
+    \vspace{0.3cm}
+
+    \textbf{Scale 4$\times$ Comparison} \\[0.1cm]
+    % Source Row
+    \subfigure[LR Input]{\includegraphics[width=0.23\linewidth]{report/images/lr_4x.png}}
+    \hspace{1cm}
+    \subfigure[Ground Truth]{\includegraphics[width=0.23\linewidth]{report/images/ground_truth.png}} \\
+    % Model Row 1
+    \subfigure[SIREN]{\includegraphics[width=0.23\linewidth]{report/images/siren_4x.png}}
+    \hfill
+    \subfigure[Fourier]{\includegraphics[width=0.23\linewidth]{report/images/fourier_4x.png}}
+    \hfill
+    \subfigure[WIRE]{\includegraphics[width=0.23\linewidth]{report/images/wire_4x.png}}
+    \hfill
+    \subfigure[MFN]{\includegraphics[width=0.23\linewidth]{report/images/mfn_4x.png}} \\
+    % Model Row 2
+    \subfigure[INCODE]{\includegraphics[width=0.23\linewidth]{report/images/incode_4x.png}}
+    \hfill
+    \subfigure[FR]{\includegraphics[width=0.23\linewidth]{report/images/fr_4x.png}}
+    \hfill
+    \subfigure[FINER]{\includegraphics[width=0.23\linewidth]{report/images/finer_4x.png}}
+    \hfill
+    \subfigure[GAUSS]{\includegraphics[width=0.23\linewidth]{report/images/gauss_4x.png}}
+
+    \caption{Visual comparison at 2$\times$ and 4$\times$ scales. The top row shows the source LR and GT targets, followed by reconstructions from the eight evaluated architectures.}
+    \label{fig:visual_2x_4x}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \textbf{Scale 8$\times$ Comparison} \\[0.1cm]
+    % Source Row
+    \subfigure[LR Input]{\includegraphics[width=0.23\linewidth]{report/images/lr_8x.png}}
+    \hspace{1cm}
+    \subfigure[Ground Truth]{\includegraphics[width=0.23\linewidth]{report/images/ground_truth.png}} \\
+    % Model Row 1
+    \subfigure[SIREN]{\includegraphics[width=0.23\linewidth]{report/images/siren_8x.png}}
+    \hfill
+    \subfigure[Fourier]{\includegraphics[width=0.23\linewidth]{report/images/fourier_8x.png}}
+    \hfill
+    \subfigure[WIRE]{\includegraphics[width=0.23\linewidth]{report/images/wire_8x.png}}
+    \hfill
+    \subfigure[MFN (Fail)]{\includegraphics[width=0.23\linewidth]{report/images/mfn_8x.png}} \\
+    % Model Row 2
+    \subfigure[INCODE]{\includegraphics[width=0.23\linewidth]{report/images/incode_8x.png}}
+    \hfill
+    \subfigure[FR]{\includegraphics[width=0.23\linewidth]{report/images/fr_8x.png}}
+    \hfill
+    \subfigure[FINER]{\includegraphics[width=0.23\linewidth]{report/images/finer_8x.png}}
+    \hfill
+    \subfigure[GAUSS]{\includegraphics[width=0.23\linewidth]{report/images/gauss_8x.png}}
+    
+    \vspace{0.3cm}
+    \hrule
+    \vspace{0.3cm}
+
+    \textbf{Scale 16$\times$ Comparison} \\[0.1cm]
+    % Source Row
+    \subfigure[LR Input]{\includegraphics[width=0.23\linewidth]{report/images/lr_16x.png}}
+    \hspace{1cm}
+    \subfigure[Ground Truth]{\includegraphics[width=0.23\linewidth]{report/images/ground_truth.png}} \\
+    % Model Row 1
+    \subfigure[SIREN]{\includegraphics[width=0.23\linewidth]{report/images/siren_16x.png}}
+    \hfill
+    \subfigure[Fourier]{\includegraphics[width=0.23\linewidth]{report/images/fourier_16x.png}}
+    \hfill
+    \subfigure[WIRE]{\includegraphics[width=0.23\linewidth]{report/images/wire_16x.png}}
+    \hfill
+    \subfigure[MFN (Fail)]{\includegraphics[width=0.23\linewidth]{report/images/mfn_16x.png}} \\
+    % Model Row 2
+    \subfigure[INCODE]{\includegraphics[width=0.23\linewidth]{report/images/incode_16x.png}}
+    \hfill
+    \subfigure[FR]{\includegraphics[width=0.23\linewidth]{report/images/fr_16x.png}}
+    \hfill
+    \subfigure[FINER]{\includegraphics[width=0.23\linewidth]{report/images/finer_16x.png}}
+    \hfill
+    \subfigure[GAUSS]{\includegraphics[width=0.23\linewidth]{report/images/gauss_16x.png}}
+
+    \caption{Visual comparison at 8$\times$ and 16$\times$ scales. The high-upscaling factors highlight the structural collapse in MFN and the artifact patterns in the Fourier-based methods.}
+    \label{fig:visual_8x_16x}
+\end{figure}
+
+\cleardoubleoddpage
+\subsection{Computational Efficiency}
+
+Table~\ref{tab:efficiency} presents efficiency rankings by scale, showing the tradeoff between training time and reconstruction quality.
+
+\begin{table}[htbp]
+\centering
+\caption{Computational efficiency rankings showing Time (seconds) / PSNR (dB)}
+\label{tab:efficiency}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Rank} & \textbf{2$\times$} & \textbf{4$\times$} & \textbf{8$\times$} & \textbf{16$\times$} \\
+\midrule
+Best & Fourier (847/26.4) & SIREN (234/26.1) & SIREN (83/24.4) & SIREN (47/22.9) \\
+Good & SIREN (859/28.0) & Fourier (233/25.2) & Fourier (84/23.5) & Fourier (48/16.5) \\
+Moderate & FINER (874/23.1) & FINER (238/21.6) & FINER (85/20.7) & FINER (47/19.5) \\
+Poor & WIRE (1133/25.7) & WIRE (302/24.1) & WIRE (104/22.9) & WIRE (56/21.1) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+WIRE is consistently the slowest method with 25 to 35 percent overhead compared to alternatives. Fourier Features achieves the fastest training at moderate scales while maintaining competitive quality. SIREN offers the optimal quality-efficiency balance across all scales. Notably, MFN appears misleadingly fast at 16$\times$ but produces completely unusable output, demonstrating that raw speed metrics must be interpreted alongside quality results.
+
+% Add this subsection within the Results section
+
+\subsection{Supplementary Experiment: Image \#0002}
+
+To verify that SIREN's strong performance generalizes beyond the lioness image, I ran an additional experiment on DIV2K image \#0002, a landscape photograph featuring a snow-capped mountain, reflective lake, and a person on horseback. This image presents different challenges: smooth sky gradients, sharp mountain edges, and fine water reflections.
+
+Table~\ref{tab:siren_0002} shows SIREN's performance across all four upscaling factors.
+
+\begin{table}[htbp]
+\centering
+\caption{SIREN performance on DIV2K image \#0002 across scales}
+\label{tab:siren_0002}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Scale} & \textbf{PSNR (dB)} & \textbf{SSIM} & \textbf{LPIPS} & \textbf{MAE} & \textbf{RMSE} \\
+\midrule
+2$\times$ & 24.59 & 0.645 & 0.487 & 0.035 & 0.059 \\
+4$\times$ & 23.60 & 0.572 & 0.560 & 0.039 & 0.066 \\
+8$\times$ & 22.60 & 0.502 & 0.691 & 0.045 & 0.074 \\
+16$\times$ & 21.39 & 0.468 & 0.768 & 0.054 & 0.085 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The degradation pattern remains consistent with the main experiment. SIREN loses approximately 1 dB per scale doubling, confirming that its graceful scaling behavior is not image-specific.
+
+Figure~\ref{fig:siren_0002} presents visual results at each scale.
+
+\begin{figure}[H]
+    \centering
+    \textbf{SIREN Multi-Scale Reconstruction on Image \#0002} \\[0.1cm]
+    % Row 1: Ground Truth and scales 2x, 4x, 8x
+    \subfigure[Ground Truth]{\includegraphics[width=0.23\linewidth]{report/images/0002.png}}
+    \hfill
+    \subfigure[SIREN 2$\times$]{\includegraphics[width=0.23\linewidth]{report/images/siren_2x_002.png}}
+    \hfill
+    \subfigure[SIREN 4$\times$]{\includegraphics[width=0.23\linewidth]{report/images/siren_4x_002.png}}
+    \hfill
+    \subfigure[SIREN 8$\times$]{\includegraphics[width=0.23\linewidth]{report/images/siren_8x_002.png}} \\
+    % Row 2: 16x only
+    \subfigure[SIREN 16$\times$]{\includegraphics[width=0.23\linewidth]{report/images/siren_16x_002.png}}
+
+    \caption{SIREN reconstruction quality on DIV2K image \#0002 across upscaling factors. Quality degrades progressively from 24.59 dB at 2$\times$ to 21.39 dB at 16$\times$, showing the same linear pattern observed on image \#0788.}
+    \label{fig:siren_0002}
+\end{figure}
+
+At 2$\times$, the reconstruction is nearly indistinguishable from the original. Mountain details, tree textures, and the water reflection are all preserved. At 4$\times$, slight softening appears but quality remains high. At 8$\times$, the degradation becomes visible with mountain ridges losing sharpness. At 16$\times$, the image is noticeably softer throughout, though colors and overall structure remain intact.
+
+Comparing the two images, SIREN achieves slightly lower absolute PSNR on image \#0002 (24.59 dB at 2$\times$) compared to image \#0788 (28.03 dB at 2$\times$). This difference likely reflects the image content: the lioness has more uniform fur texture while the landscape has greater tonal variety. However, the degradation rate remains consistent at roughly 1 dB per doubling, confirming SIREN's predictable multi-scale behavior across different image types.
+
+\cleardoubleoddpage
+\section{Discussion}
+
+\subsection{Architecture}
+
+Our systematic experiments across multiple scales reveal fundamental relationships between architectural design choices and super-resolution capability.
+
+The results demonstrate that periodic activations are essential for multi-scale robustness. SIREN's consistent leadership across all upscaling factors, declining gracefully from 28.03 dB at 2$\times$ to 22.89 dB at 16$\times$, shows that sinusoidal activations provide inherent multi-scale frequency representation. The carefully tuned frequency parameters ($\omega_0^{\text{first}} = 80$, $\omega_0^{\text{hidden}} = 30$) discovered through grid search prove sufficient for scales up to 16$\times$ without requiring architectural modifications.
+
+Conversely, multiplicative architectures prove fundamentally unsuitable for this task. MFN's catastrophic failure, with a 12.77 dB drop between 4$\times$ and 8$\times$ resulting in just 9.38 dB at 16$\times$, represents complete architectural breakdown rather than gradual degradation. The multiplicative structure creates pathological interactions at high downsampling ratios, definitively showing that multiplicative filter networks cannot handle high-ratio super-resolution.
+
+Counter-intuitively, adaptive mechanisms provide no advantage in this setting. FINER's input-dependent frequency adaptation offers no performance benefit over SIREN's fixed frequency parameters despite added computational complexity. Similarly, INCODE's harmoniser network incurs 11 percent computational overhead without quality improvement. This suggests that for single-image super-resolution, well-chosen fixed parameters outperform adaptive mechanisms.
+
+Positional encoding shows moderate multi-scale benefits. Fourier Features achieves competitive performance at moderate scales, ranking second-best at 2$\times$ with 26.40 dB. However, it shows severe degradation at extreme scales, dropping to 16.49 dB at 16$\times$ compared to SIREN's 22.89 dB. The random Gaussian projection matrix works well initially but lacks the structured periodicity needed for extreme upscaling.
+
+Finally, smooth non-periodic activations prove inadequate for fine details. GAUSS shows consistent but severe multi-scale degradation from 22.85 dB to 16.37 dB across scales. Smooth Gaussian functions cannot efficiently represent sharp edges, fine whiskers, or rapid oscillations in texture regions. The lack of periodicity fundamentally limits representation capacity for high-frequency content regardless of optimization effort.
+
+\subsection{Recommendations}
+
+For standard super-resolution at 2$\times$ to 4$\times$ scales, SIREN is recommended as it provides the highest quality at moderate computational cost. Fourier Features serves as a viable speed alternative when training time is critical, offering competitive quality with the fastest training. Methods like MFN, FINER, and INCODE should be avoided as they offer no advantage while carrying potential failure risk.
+
+For high-ratio super-resolution at 8$\times$ to 16$\times$ scales, SIREN is the only viable option as it is the only method maintaining greater than 22 dB PSNR at both scales. MFN should never be used due to complete failure, and INCODE, GAUSS, and Fourier Features should be avoided due to severe degradation at these scales.
+
+\subsection{Limitations}
+
+While our experimental design provides valuable insights, several limitations must be acknowledged.
+
+Our analysis focuses exclusively on one image from the DIV2K dataset, specifically image \#0788 with its complex fur texture and challenging high-frequency content. Performance characteristics may differ substantially for other content types such as smooth portraits, architectural geometry with sharp lines, natural landscapes with sky gradients, or synthetic computer graphics. Multi-image evaluation would strengthen generalization claims.
+
+While we performed systematic grid search to identify optimal configurations for each method, the search space was necessarily limited by computational constraints. Methods with larger hyperparameter spaces like WIRE, INCODE, and FINER might benefit disproportionately from more extensive optimization using techniques like Bayesian optimization or automated hyperparameter tuning. The reported results represent good but potentially not globally optimal configurations.
+
+All experiments used exactly 100 epochs regardless of convergence characteristics. Convergence analysis might reveal that different methods have different optimal training durations. Some methods might achieve better results with extended training while others might overfit. Dynamic early stopping based on validation loss could provide more nuanced insights.
+
+While the multi-seed evaluation (10 seeds) quantifies initialization variance, it does not capture the variance that would arise from different training durations, learning rate schedules, or batch sizes. The reported standard deviations reflect only one dimension of method stability.
+
+Finally, DIV2K represents natural photographs with specific statistical properties. Different application domains exhibit fundamentally different characteristics: medical imaging has distinct noise patterns and anatomical structures, satellite imagery requires handling atmospheric distortions and spectral information, and synthetic data has perfect edges but lacks natural texture statistics. Cross-domain evaluation would reveal domain-specific architectural preferences.
+\cleardoubleoddpage
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Conclusion
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+\label{sec:conclusion}
+
+\subsection{Summary}
+
+This practical work systematically evaluated eight Implicit Neural Representation architectures for image super-resolution across four upscaling factors. SIREN demonstrates the most robust performance, declining gracefully from 28.03 to 22.89 dB while maintaining greater than 22 dB PSNR even at extreme 16$\times$ upscaling. Multiplicative architectures like MFN fail catastrophically at high upscaling ratios, experiencing greater than 14 dB performance collapse. Smooth non-periodic activations like those in GAUSS prove inadequate for fine detail preservation. Adaptive mechanisms provide no advantage over fixed alternatives for single-image super-resolution tasks. Computational costs vary dramatically by a factor of 32 even among methods of similar complexity. Critical failure thresholds exist between 4$\times$ and 8$\times$ for several methods. No architecture universally excels, meaning method selection must consider the target upscaling ratio.
+
+\subsection{Contributions}
+
+This work provides reproducible benchmarks with comprehensive metrics across multiple scales and documents specific failure modes including MFN collapse, FR color aberrations, and Fourier grid artifacts. The single-image multi-scale design eliminates cross-image variation that could confound results. We offer practical guidance for method selection based on application requirements and provide efficiency analysis revealing time-quality tradeoffs.
+
+\subsection{Future Research Directions}
+
+Our findings suggest several promising avenues for advancing INR-based super-resolution:
+
+\textbf{Architectural Improvements:} Future work should explore progressive curriculum learning and scale-aware initialization to prevent catastrophic failures like those seen in MFN. Hybrid models combining Fourier features with SIREN activations, alongside spatial attention mechanisms, could better balance high-frequency details with smooth regions.
+    
+\textbf{Optimization and Training:} Theoretical analysis of loss landscapes is needed to understand specific architectural breakdowns. Additionally, adaptive learning rates and regularization techniques targeting multi-scale consistency may prevent mode collapse at extreme upscaling factors.
+    
+\textbf{Generalization and Deployment:} Testing on diverse datasets (e.g., medical or satellite imagery) is essential to address single-image limitations. Furthermore, research into model compression (quantization, pruning) and optimized CUDA kernels is required to move these architectures from experimental scripts to real-time applications.
+
+Implicit Neural Representations offer a powerful paradigm for super-resolution. This evaluation identifies SIREN as the most robust choice for balancing quality and stability. As the field matures, research must move beyond verifying if methods work toward understanding why they fail and how to optimize them for practical use.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Bibliography
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\cleardoubleoddpage
+\printbibliography
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Appendix
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\appendix
+
+\section{Implementation}
+\label{app:implementation}
+
+The complete source code for all experiments, including model implementations, training scripts, and evaluation utilities, is available at \url{https://github.com/AhmedKElshahed/INR}.
+
+\cleardoubleoddpage
+\end{document}

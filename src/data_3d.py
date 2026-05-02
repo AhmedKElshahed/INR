@@ -15,7 +15,7 @@ class OccupancyDataset(Dataset):
         self.points = torch.from_numpy(data['points']).float()
 
         min_vals = self.points.min(dim=0)[0]
-        max_vals = self.points.max(dim=0)[0]
+        max_vals = self.points.max(dim=0)[0]    
         center = (min_vals + max_vals) / 2
         self.points = self.points - center
         

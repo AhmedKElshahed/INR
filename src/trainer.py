@@ -12,7 +12,7 @@ def train_inr_for_scale(
     epochs=100, lr=1e-4, batch_size=2000,
     device='cuda', lpips_fn=None, csv_path='results.csv',
     checkpoint_dir='checkpoints', grad_clip=1.0,
-    loss_type="mse"
+    loss_type="mse", seed=None, save_checkpoints=True
 ):
     print(f"\n{'='*70}")
     print(f"Training {model_name.upper()} for {scale}× Super-Resolution")
@@ -69,7 +69,7 @@ def train_inr_for_scale(
             avg_loss = epoch_loss / max(1, len(dataloader))
             print(f"Epoch {epoch+1:3d}/{epochs} | Loss: {avg_loss:.6f} | LR: {optimizer.param_groups[0]['lr']:.6f}")
         
-        if (epoch + 1) % 50 == 0:
+        if save_checkpoints and (epoch + 1) % 50 == 0:
             ckpt_path = os.path.join(checkpoint_dir, f"epoch_{epoch+1:03d}.pth")
             torch.save({
                 'epoch': epoch + 1,
@@ -109,10 +109,12 @@ def train_inr_for_scale(
     with open(csv_path, 'a', newline='') as f:
         writer = csv.writer(f)
         if not csv_exists:
-            writer.writerow(['timestamp', 'model', 'scale', 'config', 'psnr', 'ssim', 'lpips', 'score', 'mae', 'rmse', 'error_std', 'epochs', 'lr', 'loss'])
-        writer.writerow([timestamp, model_name, scale, config_str, f"{psnr_val:.2f}", f"{ssim_val:.4f}", f"{lpips_val:.4f}", f"{score:.2f}", f"{mae:.4f}", f"{rmse:.4f}", f"{error_std:.4f}", epochs, lr, loss_type])
+            writer.writerow(['timestamp', 'model', 'scale', 'seed', 'config', 'psnr', 'ssim', 'lpips', 'score', 'mae', 'rmse', 'error_std', 'epochs', 'lr', 'loss'])
+        seed_str = str(seed) if seed is not None else ''
+        writer.writerow([timestamp, model_name, scale, seed_str, config_str, f"{psnr_val:.4f}", f"{ssim_val:.4f}", f"{lpips_val:.4f}", f"{score:.4f}", f"{mae:.4f}", f"{rmse:.4f}", f"{error_std:.4f}", epochs, lr, loss_type])
 
-    final_path = os.path.join(checkpoint_dir, f"{model_name}_{scale}x_final.pth")
-    torch.save({'model_state_dict': model.state_dict(), 'config': config_str}, final_path)
+    if save_checkpoints:
+        final_path = os.path.join(checkpoint_dir, f"{model_name}_{scale}x_final.pth")
+        torch.save({'model_state_dict': model.state_dict(), 'config': config_str}, final_path)
 
     return pred_rgb, psnr_val, ssim_val, lpips_val, mae, rmse, error_std, error_map
