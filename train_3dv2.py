@@ -310,6 +310,10 @@ if __name__ == "__main__":
     parser.add_argument("--out",    type=str,   default=None,
                         help="Results CSV. Default: results_3d_comparison.csv for a "
                              "single seed, results_3d_seeds.csv for multiple.")
+    parser.add_argument("--batch",  type=int,   default=None,
+                        help="Batch size. Default: 16384 on GPU, 2048 on CPU. Pin it "
+                             "explicitly (e.g. --batch 16384) when pooling runs across "
+                             "machines so every run shares one protocol.")
     args = parser.parse_args()
 
     base_name    = os.path.splitext(args.mesh)[0]
@@ -351,7 +355,7 @@ if __name__ == "__main__":
             try:
                 print(f"\n{'='*60}")
                 print(f">> STARTING: {mname.upper()}  (seed {seed})")
-                bs = 16384 if torch.cuda.is_available() else 2048
+                bs = args.batch or (16384 if torch.cuda.is_available() else 2048)
 
                 duration, train_iou, eval_iou, chamfer, nc, cfg_str = train_occupancy(
                     mname, dataset_file,
