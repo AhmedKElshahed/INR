@@ -1,0 +1,37 @@
+% !TeX encoding = UTF-8
+% !TeX root = MAIN.tex
+\newif\ifeng
+\engtrue
+%% --- Author Info ---
+\def\author{Ahmed Elshahed}
+%% --- Top Right Block under JKU logo ---
+\def\elementA{Author}
+\def\elementAA{\textbf{\author} \\ K12236792}
+\def\elementB{Submission}
+\def\elementBB{\textbf{Institute for Machine Learning}}
+\def\elementD{Supervisor}
+\def\elementDD{\textbf{Eric Volkmann}, MSc}
+\def\date{March 2026}
+\def\place{Linz}
+%% --- Thesis Title and Subtitle ---
+\def\title{Implicit Neural Representations for 3D Shape Reconstruction: A Comparative Study}
+%% --- Type of Work ---
+\def\type{1} % 1 = Bachelor's thesis, 2 = Master's thesis
+%% --- Academic Degree ---
+\def\acadDegree{Bachelor of Science}
+%% --- Study Program ---
+\def\study{Artificial Intelligence}
+%% --- Metadata for PDF file ---
+\begin{filecontents*}[overwrite]{\jobname.xmpdata}
+\Title{Implicit Neural Representations for 3D Shape Reconstruction: A Comparative Study}
+\Author{Ahmed Elshahed}
+\Subject{Comparing eight implicit neural representation architectures for three-dimensional occupancy reconstruction to determine which design properties enable accurate capture of geometric detail}
+\Keywords{Implicit Neural Representations, 3D Reconstruction, Shape Representation, Deep Learning, Occupancy Networks, SIREN, Spectral Bias}
+\Language{en-US}
+\Publisher{Johannes Kepler University Linz}
+\end{filecontents*}
+% --- Add packages used across the thesis -------------------------------
+% (These must be loaded before \begin{document}. Since config.tex is input
+% from main.tex in the preamble, placing them here is correct.)
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,matrix}

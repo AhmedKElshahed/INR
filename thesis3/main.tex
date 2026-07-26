@@ -1,0 +1,292 @@
+% !TeX encoding = UTF-8
+% !TeX program = pdflatex
+% !BIB program = biber
+% rubber: setlist arguments --shell-escape
+
+% Template Revision:
+% Rev  E1 -- 2021-12    -- Simone Atzwanger
+% Rev. D1 -- 2021-06    -- Max Heisinger
+% Rev. C2 -- 2021-05-11 -- Ali Varli
+% Rev. C1 -- 2021-03-22 -- Ali Varli
+% Rev. B1 -- 2019-11-05 -- Ali Varli
+
+\documentclass[%
+	a4paper,
+	11pt,
+	BCOR=10mm,
+	DIV=12,
+	headinclude,
+	headheight=16mm,
+	oneside,
+	onecolumn,
+	openany,
+	parskip=half,
+	% appendixprefix,
+	% toc=flat,
+	% chapterentrydots=true,
+    chapterprefix,
+	table,
+	fleqn,
+	% draft
+]{scrbook}[2015/09/29]% needs version 3.19 or newer
+
+\usepackage[utf8]{inputenc}
+
+\input{config}
+
+\usepackage{todonotes}
+\usepackage{graphicx}
+\usepackage{tikz}
+\tikzset{
+    feature/.style={rectangle, draw, fill=blue!20, minimum width=2cm, minimum height=0.8cm},
+    mandatory/.style={->, thick},
+    optional/.style={->, dashed, thick},
+    alternative/.style={draw, circle, inner sep=2pt}
+}
+\usepackage{pgfplots}
+\usetikzlibrary{shapes,arrows,positioning,matrix,fit,backgrounds}
+\usetikzlibrary{decorations.pathreplacing,calc}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{pdfpages}
+\usepackage[T2A]{fontenc}
+\usepackage{mathpazo}
+\usepackage[nottdefault]{sourcecodepro}
+\usepackage[bitstream-charter]{mathdesign}
+\usepackage{microtype}
+\DisableLigatures{encoding = *, family = tt* }
+\usepackage[scale=0.97]{XCharter}
+\setkomafont{disposition}{\bfseries}
+\ifeng%
+	\usepackage[ngerman,english]{babel}
+\else
+	\usepackage[english,ngerman]{babel}
+\fi
+\usepackage[absolute]{textpos}
+\usepackage[binary-units]{siunitx}
+\usepackage{amsmath}
+\usepackage[%
+	backend=biber,
+	style=numeric-comp, % authoryear
+	bibstyle=numeric, % authoryear
+	citestyle=numeric, % authoryear
+	% maxcitenames=2,
+	sorting=none, %nty
+	backref=true,
+	backrefstyle=none
+]{biblatex}
+\addbibresource{literature.bib}
+\usepackage{csquotes}
+\usepackage{lastpage,scrlayer-scrpage}
+\pagestyle{scrheadings}
+\clearpairofpagestyles%
+
+%\ifeng%
+%	\ohead*{\includegraphics[width=3cm]{cover/jkuen}}
+%\else
+%	\ohead*{\includegraphics[width=3cm]{cover/jkude}}
+%\fi
+
+\ifoot*{\date}
+\cfoot*{\author}
+\ofoot*{\pagemark/\pageref{LastPage}}
+
+\setkomafont{pageheadfoot}{\sffamily\scriptsize}
+\setkomafont{pagenumber}{\sffamily\scriptsize}
+
+\usepackage[onehalfspacing]{setspace}
+\usepackage{booktabs,colortbl,xcolor}
+\usepackage{graphicx,wrapfig}
+% Single search path for all artwork; all \includegraphics paths are relative to thesis3/.
+\graphicspath{{Figures/}{Figures/results/}{cover/}}
+\usepackage[section]{placeins} %\FloatBarrier
+\usepackage{float} %[H]
+\usepackage{enumitem}
+\usepackage{subfiles}
+\usepackage{scrhack}
+\usepackage[%
+	bookmarksnumbered=true,
+	pdfborder={0 0 0},
+	pdfa
+]{hyperref}
+\usepackage[super]{nth}
+\usepackage{subcaption}
+
+\usepackage{booktabs}
+\newcommand{\R}{\mathbb{R}}
+\usepackage[newfloat]{minted}
+\usemintedstyle{friendly}
+\usepackage{caption}
+\usepackage{mwe}
+\newenvironment{code}{\captionsetup{type=listing}}{}
+\SetupFloatingEnvironment{listing}{name=Listing}
+
+% from http://tex.stackexchange.com/questions/57151/how-do-i-prevent-conflicts-between-accsupp-and-hyperref
+\usepackage{accsupp}
+\newcommand\emptyaccsupp[1]{\BeginAccSupp{ActualText={}}#1\EndAccSupp{}}
+
+
+%default definition is: \def\theFancyVerbLine{\rmfamily\tiny\arabic{FancyVerbLine}}
+\let\theHFancyVerbLine\theFancyVerbLine% don't apply our patch to hyperref's version
+\def\theFancyVerbLine{\rmfamily\tiny\emptyaccsupp{\arabic{FancyVerbLine}}}
+
+%% Taken from https://tex.stackexchange.com/a/35494
+\newenvironment{longdescription}
+  {\begin{description}[style=unboxed]}
+  {\end{description}}
+
+\usepackage{cmap}
+\usepackage[a-2b]{pdfx}
+\usepackage{colorprofiles}
+
+\usepackage{tikz}
+
+%% Example for diagrams taken from https://texample.net/tikz/examples/android/
+\usetikzlibrary{arrows,arrows.meta,calc,shapes,automata}
+\usetikzlibrary{positioning}
+\tikzset{%
+  >={Latex[width=2mm,length=2mm]},
+  % Specifications for style of nodes:
+            base/.style = {rectangle, rounded corners, draw=black,
+                           minimum width=4cm, minimum height=1cm,
+                           text centered, font=\sffamily},
+          starts/.style = {base, fill=blue!30},
+           stops/.style = {base, fill=red!30},
+            runs/.style = {base, fill=green!30},
+           state/.style = {base, fill=purple!30},
+         process/.style = {base, fill=orange!15},
+             box/.style = {rectangle,draw},
+}
+
+\usepackage{adjustbox}
+
+% \setcounter{tocdepth}{3} %subsubsection
+% \setcounter{secnumdepth}{3}
+
+\tolerance=300
+\clubpenalty=10000
+\widowpenalty=10000
+\displaywidowpenalty=10000
+
+% \addtocontents{toc}{\protect\enlargethispage{2\normalbaselineskip}}
+% \addtocontents{lof}{\protect\enlargethispage{2\normalbaselineskip}}
+% \addtocontents{lot}{\protect\enlargethispage{2\normalbaselineskip}}
+
+\addtokomafont{caption}{\small}
+\setkomafont{captionlabel}{\small\sffamily\bfseries}
+
+% Change the shorthand and the VeryCoolTool name to have standardized tool or
+% software names always in smallcaps (textsc).
+\newcommand{\toolshorthand}{\textsc{VeryCoolTool}}
+
+\let\oldcite\cite
+\renewcommand{\cite}[1]{\mbox{\oldcite{#1}}}
+
+\RedeclareSectionCommand[%
+  font=\normalfont\huge\scshape,
+  prefixfont=\Large,
+  beforeskip=-1cm,
+  innerskip=0pt
+]{chapter}
+
+\let\raggedchapter\raggedright
+
+\renewcommand*{\chapterlineswithprefixformat}[3]{%
+  \IfArgIsEmpty{#2}{#3}{%
+    \parbox[b][\dimexpr .2\linewidth-\dp\strutbox-\baselineskip]{.78\linewidth}{%
+      \raggedchapter\strut\ignorespaces #2 #3%
+    }\hfill%
+    \rule[0.8cm]{\linewidth}{1pt}%
+    \vspace{-\baselineskip}
+    
+  }%
+}
+\renewcommand*{\chapterformat}{%
+  \IfUsePrefixLine{%
+    \raisebox{0pt}{%
+      \chapapp\enskip%
+    }
+    \vspace{-1.2cm}
+    \usekomafont{chapter}%
+    \raisebox{\dimexpr -.2\linewidth+\baselineskip}[0pt][0pt]{%
+%      \frame{%
+        \resizebox*{.2\linewidth}{.2\linewidth}{%
+          \currentchapternumberbackground
+        }%
+%      }%
+      \makebox[\linewidth][r]{%
+        \parbox{0pt}{%
+          \raisebox{3.7cm}{%
+            \fontsize{2cm}{2cm}\selectfont
+            \raisebox{1.5\linewidth}{\color{gray!50!}\thechapter}\par
+          }%
+        }%
+      }%
+    }%
+  }{%
+    \thechapter\autodot\enskip
+  }%
+}
+\newcommand*{\chapternumberbackground}[1]{%
+  \renewcommand*{\currentchapternumberbackground}{#1}%
+}
+\newcommand*{\currentchapternumberbackground}{%
+  {\color{white!50}\rule{1cm}{1cm}}%
+}
+\makeatother
+
+%
+%%
+%%%%
+%%%%%%%%
+%%%%%%%%%%%%%%%%
+\begin{document}
+%%%%%%%%%%%%%%%%
+
+\begin{titlepage}
+	\setcounter{page}{0}
+	\include{cover/coversheet}
+\end{titlepage}
+
+%%%%%%%%%%%%
+\frontmatter
+
+\input{frontmatter}
+
+\begin{singlespace}
+	\tableofcontents
+	\listoffigures 
+	%\listoftables
+\end{singlespace}
+
+%%%%%%%%%%%
+\mainmatter
+
+% All paths below are relative to this file's directory; compile from thesis3/.
+\input{chapters/01_intro}
+\input{\detokenize{chapters/02_Background and Related Work}}
+\input{chapters/03_Methodology}
+\input{chapters/04_Implementation}
+\input{\detokenize{chapters/05_Experiments and Results}}
+\input{chapters/06_Discussion}
+
+%%%%%%%%%%%%%%%%%%
+\printbibliography
+
+%%%%%%%%%
+\appendix
+\input{chapters/Appendix}
+
+
+%TODO if another pdf should be appended/added
+%\includepdf[pages=-]{paper.pdf}
+
+\end{document}
+
+%%% Local Variables:
+%%% TeX-engine: default
+%%% TeX-master: t
+%%% TeX-command-extra-options: "-shell-escape"
+%%% End:

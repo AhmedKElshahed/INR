@@ -1,0 +1,62 @@
+\chapter{Methodology}
+\label{ch:methodology}
+
+This chapter describes how we designed and conducted our experiments. The goal is to compare eight implicit neural representation methods fairly, so we kept everything except the architectural differences identical across all experiments.
+
+\section{Experimental Task}
+
+Our task is straightforward: given a three-dimensional object, train a neural network to predict whether any point in space is inside or outside that object. The network receives coordinates $(x, y, z)$ and outputs a number between 0 and 1. Values close to 1 mean the point is probably inside; values close to 0 mean it is probably outside.
+
+This binary classification setting differs from image tasks where networks predict continuous color values. The sharp transition between inside and outside creates a challenging test for each method's ability to represent high-frequency content.
+
+\section{Test Object}
+
+We chose the Nefertiti bust as our test object. This mesh offers a good mix of challenges: smooth facial surfaces, sharp transitions at the edges of the headdress, and fine ornamental details. The geometry is complex enough to reveal differences between methods while being small enough for practical experimentation.
+
+Before training, we normalize the mesh to fit within a cube from $-1$ to $1$ in each dimension. This standardization ensures that coordinate values stay in a reasonable range and makes hyperparameter choices more consistent.
+
+\section{Preparing Training Data}
+
+Neural networks learn from examples, so we need many points with known inside/outside labels. Simply scattering points randomly throughout space would be inefficient---most points would land far from the surface where the answer is obviously "outside."
+
+We therefore combine two sampling strategies in equal proportion. Half of the points are drawn uniformly at random from the bounding box, teaching the network the global inside/outside structure. The other half are drawn near the surface: we pick a random location on the mesh and displace it by Gaussian noise with standard deviation $\sigma = 0.01$, concentrating supervision in the boundary region where classification is hardest.
+
+For each point, we determine the true label using ray casting. We shoot a ray from the point in a fixed direction and count how many times it crosses the mesh surface. An odd number of crossings means the point is inside; an even number means outside. This method handles complex shapes correctly, including those with holes or multiple separate parts.
+
+Sampling is performed once, ahead of training, producing a fixed dataset of 500,000 labelled points that is distributed with the code as \texttt{nefertiti\_dataset.npz}. All models are trained on this same dataset, so no method benefits from a more favourable draw of points. Because the dataset is fixed rather than resampled each epoch, a sufficiently expressive network can in principle memorize individual point labels; we return to this point when we examine the gap between training and evaluation accuracy in Chapter~\ref{ch:results}.
+
+\section{Network Structure}
+
+To keep the comparison controlled, all eight methods use the same basic network size: four hidden layers with 256 neurons each. The only differences are the architectural choices specific to each method---activation functions, positional encodings, or layer interactions.
+
+Matching depth and width does not, however, match parameter count. Because each method parameterizes its layers differently, the resulting models range from 133{,}250 trainable parameters (FR, which stores a small set of Fourier coefficients per weight matrix) to 1{,}057{,}282 (WIRE, whose complex-valued weights require two real numbers each), with most methods near 265{,}000. This is a limitation of the comparison rather than a property of the methods: differences in reconstruction quality may partly reflect differences in capacity, and we take this into account when interpreting the results.
+
+The network takes three numbers $(x, y, z)$ as input and produces one number as output. A sigmoid function squashes this output to the range $[0, 1]$, giving us a probability that the point is inside the object.
+
+\section{Training Process}
+
+We train all networks using the Adam optimizer~\cite{kingma2014adam}, which adapts learning rates automatically for each parameter. The initial learning rate is $1 \times 10^{-4}$, and we gradually reduce it following a cosine schedule that reaches $1 \times 10^{-6}$ by the end of training. This approach allows fast initial progress while enabling fine-tuning in later stages. Two methods did not converge stably at this rate and required an override: GAUSS uses $1 \times 10^{-3}$ and MFN uses $3 \times 10^{-4}$. We note this as a departure from an otherwise identical protocol.
+
+Training runs for 500 epochs with batches of 16,384 points, using the 450,000-point training split; the remaining 50,000 points are held out for evaluation. We apply gradient clipping to prevent instabilities---if gradients grow too large, we scale them down to a maximum norm of 1.0. This is particularly important for methods like WIRE that use complex numbers.
+
+The loss function is Binary Cross-Entropy, which is standard for classification tasks. It penalizes confident wrong predictions heavily: if the network says a point is definitely inside when it is actually outside, the loss is large. This encourages the network to be accurate especially near boundaries where mistakes are most visible.
+
+\section{Measuring Performance}
+
+We measure performance in two complementary ways, and it is important to keep them separate because they are computed on different data.
+
+Our primary metric is Intersection over Union (IoU) on the held-out validation split. We query the trained network at the 50,000 points it never saw during training, threshold the outputs at 0.5, and compute the overlap between predicted and true occupied sets. An IoU of 1.0 means perfect classification; lower values indicate errors. We report this alongside the final training IoU, since the gap between the two reveals whether a method has learned the underlying geometry or merely memorized the training points.
+
+Our secondary metrics assess the reconstructed surface rather than point labels. We query the network on a dense $256 \times 256 \times 256$ grid (over 16 million points) covering the bounding box and extract a mesh at the 0.5 level set using Marching Cubes~\cite{lorensen1987marching}. From this mesh we compute Chamfer-L1 distance, the average nearest-neighbour distance between points sampled on the predicted and ground-truth surfaces, and normal consistency, the average alignment of their surface normals. Both are estimated from surface samples drawn at random, so small differences between methods should not be over-interpreted.
+
+\section{Hyperparameter Selection}
+
+Each method has its own hyperparameters that affect performance. SIREN has frequency parameters $\omega_0$, WIRE has wavelet parameters, Fourier Features has encoding scale, and so on. We tuned these through grid search, starting from values recommended in the original papers and adjusting based on validation performance.
+
+The specific values we used are listed in Appendix B. All methods use four hidden layers, and we kept this consistent to isolate the effect of architectural differences from network depth.
+
+\section{Computing Environment}
+
+We ran all experiments on Kaggle Notebooks using a single NVIDIA Tesla T4 GPU with 16\,GB of memory. Although the Kaggle instance provides two T4s, the training script places the model on one device and does not use data parallelism, so only one GPU is used. The software stack included PyTorch 2.0, CUDA 11.8, and Python 3.10.
+
+Training a single model for 500 epochs took between roughly 44 minutes (SIREN, the fastest) and 65 minutes (WIRE, the slowest); mesh extraction and metric computation add further time on top of these figures. The full eight-method benchmark therefore requires approximately 6.5 GPU-hours.

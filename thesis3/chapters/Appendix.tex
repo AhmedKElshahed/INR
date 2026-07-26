@@ -1,0 +1,227 @@
+\chapter{Appendix}
+\label{ch:appendix}
+
+\section*{Appendix A: Research Overview}
+\addcontentsline{toc}{section}{Appendix A: Research Overview}
+
+This section provides a concise summary of the thesis by answering ten guiding questions.
+
+\subsection*{1. What is the central question?}
+Which implicit neural representation architecture works best for three-dimensional occupancy reconstruction, and what architectural properties determine success?
+
+\subsection*{2. Why is this question important?}
+Practitioners face many architectural choices when using neural networks for 3D shape representation, but lack clear guidance on which methods work best. Understanding what makes certain architectures succeed helps both method selection and future architecture design.
+
+\subsection*{3. What evidence/data (variables) are needed to answer this question?}
+We need reconstruction quality metrics (IoU, accuracy, precision, recall, F1) for multiple architectures on the same test shape. We also need information about each architecture's properties (spatial compactness, frequency compactness, adaptivity) and computational costs (training time).
+
+\subsection*{4. What methods are used to get this evidence/data?}
+We implemented eight INR architectures (SIREN, WIRE, GAUSS, FINER, Fourier Features, INCODE, MFN, FR) with identical network structure and training procedures. Each method was trained on the Nefertiti bust mesh and evaluated on a dense $256^3$ grid.
+
+\subsection*{5. What analyses must be applied to the data to answer the central question?}
+We compared reconstruction metrics across methods to establish performance ranking. We grouped methods by architectural properties and computed average performance for each group to identify which properties correlate with success.
+
+\subsection*{6. What evidence/data (values for the variables) were obtained?}
+Evaluation IoU ranged from 0.9158 (GAUSS) to 0.9641 (INCODE), with six of the eight methods clustered between 0.9521 and 0.9641 and the top two separated by 0.0009. Training times ranged from 2635 seconds (SIREN) to 3927 seconds (WIRE), with seven of eight inside a 10\% band. A controlled ablation on the Fourier frequency scale gave 0.9632 at $\sigma = 1.0$ against 0.7966 at $\sigma = 10.0$.
+
+\subsection*{7. What were the results of the analyses?}
+The six leading methods could not be separated: their 1.2 percentage point spread is not distinguishable from run-to-run variation, since each configuration was trained once without seeded initialization. MFN and GAUSS trailed clearly, but both failed to fit their own training data, indicating optimization difficulty rather than a representational limit. The frequency-scale ablation moved accuracy by 16.7 points, fourteen times the spread between architectures, while improving training accuracy to a perfect 1.0000.
+
+\subsection*{8. How did the analyses answer the central question?}
+Partially, and in an unexpected direction: the comparison did not identify a best architecture, because the leading methods are indistinguishable at this sample size, while one hyperparameter within a single method outweighed every architectural difference combined. The two weakest methods were shown to fail for optimization rather than representational reasons. The grouped property analysis proved unsound, supporting a $+3.5$, $-0.67$, or $+0.36$ percentage point conclusion depending on one hyperparameter or one included method.
+
+\subsection*{9. What does this answer tell us about the broader field?}
+Architectural property taxonomies of the kind proposed in recent surveys are attractive but require careful empirical validation: with one run per configuration, a grouped mean can be dominated by a single outlier and report a confident conclusion in either direction. Comparisons that hold depth and width fixed should also report parameter counts, since matching architecture does not match capacity.
+
+\subsection*{10. Did the thesis answer the question satisfactorily?}
+Not in the form originally posed: we could not determine which architecture is best, because the experiment lacks the repeated runs needed to resolve differences of this size. What it does establish is the separation of three distinct failure modes and the demonstration that a property-based analysis over single runs can reverse its own conclusion. The main limitations are the absence of repeated runs, evaluation on a single mesh, an eight-fold spread in parameter counts, and single-shape fitting without generalization testing.
+
+\newpage
+
+\section*{Appendix B: Experimental Details}
+\addcontentsline{toc}{section}{Appendix B: Experimental Details}
+
+\subsection*{B.1 Hyperparameter Configurations}
+
+Table~\ref{tab:full_hyperparams} provides the complete hyperparameter settings used in all experiments.
+
+\begin{table}[htbp]
+\centering
+\caption{Complete hyperparameter configurations for 3D occupancy reconstruction.}
+\label{tab:full_hyperparams}
+\begin{tabular}{llp{6cm}}
+\toprule
+\textbf{Method} & \textbf{Parameter} & \textbf{Value} \\
+\midrule
+\multirow{3}{*}{SIREN}
+    & $\omega_0^{\text{first}}$ & 30.0 \\
+    & $\omega_0^{\text{hidden}}$ & 30.0 \\
+    & hidden\_layers & 4 \\
+\midrule
+\multirow{4}{*}{WIRE}
+    & $\omega_0^{\text{first}}$ & 40.0 \\
+    & $\omega_0^{\text{hidden}}$ & 20.0 \\
+    & $\sigma_0$ & 3.0 \\
+    & hidden\_layers & 4 \\
+\midrule
+\multirow{3}{*}{GAUSS}
+    & input\_scale & 20.0 \\
+    & $\sigma$ & 1.0 \\
+    & hidden\_layers & 4 \\
+\midrule
+\multirow{2}{*}{FINER}
+    & frequency\_bands & 16 \\
+    & hidden\_layers & 4 \\
+\midrule
+\multirow{3}{*}{Fourier Features}
+    & $m$ (number of frequencies) & 256 \\
+    & $\sigma$ (frequency scale) & 1.0 \\
+    & hidden\_layers & 4 \\
+\midrule
+\multirow{2}{*}{INCODE}
+    & scale & 50.0 \\
+    & hidden\_layers & 4 \\
+\midrule
+\multirow{4}{*}{MFN}
+    & input\_scale & 10.0 \\
+    & $\alpha$ & 6.0 \\
+    & $\beta$ & 1.0 \\
+    & hidden\_layers & 4 \\
+\midrule
+\multirow{2}{*}{FR}
+    & $F$ & 64 \\
+    & hidden\_layers & 4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{B.2 Training Configuration}
+
+\begin{table}[htbp]
+\centering
+\caption{Shared training configuration for all experiments.}
+\label{tab:training_config}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Optimizer & Adam \\
+Initial learning rate & $1 \times 10^{-4}$ \\
+Learning rate overrides & GAUSS $1 \times 10^{-3}$; MFN $3 \times 10^{-4}$ \\
+Learning rate schedule & Cosine annealing \\
+Minimum learning rate & $1 \times 10^{-6}$ \\
+Weight decay & $1 \times 10^{-5}$ \\
+Batch size & 16,384 \\
+Training epochs & 500 \\
+Dataset size & 500,000 points (fixed, not resampled) \\
+Sampling & 50\% uniform, 50\% near-surface ($\sigma = 0.01$) \\
+Train / validation split & 450,000 / 50,000 (seed 42) \\
+Gradient clipping & 1.0 (max norm) \\
+Loss function & Binary Cross-Entropy \\
+Output activation & Sigmoid \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{B.3 Network Architecture}
+
+\begin{table}[htbp]
+\centering
+\caption{Network architecture specification.}
+\label{tab:network_arch}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Input dimension & 3 $(x, y, z)$ \\
+Hidden layers & 4 \\
+Hidden features & 256 \\
+Output dimension & 1 \\
+Output activation & Sigmoid \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Depth and width are identical across methods, but parameter counts are not, because each
+method parameterizes its layers differently. Table~\ref{tab:param_counts} gives the actual
+trainable parameter count for each configuration.
+
+\begin{table}[htbp]
+\centering
+\caption{Trainable parameter counts for each method at the shared depth and width (4 hidden layers, 256 features).}
+\label{tab:param_counts}
+\begin{tabular}{lr}
+\toprule
+\textbf{Method} & \textbf{Parameters} \\
+\midrule
+FR & 133,250 \\
+SIREN & 264,449 \\
+GAUSS & 264,454 \\
+FINER & 267,009 \\
+MFN & 268,545 \\
+Fourier Features & 328,961 \\
+INCODE & 353,365 \\
+WIRE & 1,057,282 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{B.4 Evaluation Configuration}
+
+\begin{table}[htbp]
+\centering
+\caption{Evaluation configuration.}
+\label{tab:eval_config}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Evaluation IoU measured on & held-out split (50,000 points) \\
+Classification threshold & 0.5 \\
+Surface metrics measured on & $256^3$ marching-cubes mesh \\
+Grid points queried & 16,777,216 \\
+Coordinate range & $[-1, 1]^3$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{B.5 Computational Environment}
+
+\begin{table}[htbp]
+\centering
+\caption{Hardware and software environment.}
+\label{tab:compute_env}
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Specification} \\
+\midrule
+Platform & Kaggle Notebooks \\
+GPU & NVIDIA Tesla T4 (single device used) \\
+GPU memory & 16 GB \\
+Training time per model & 44--65 minutes (500 epochs) \\
+Total benchmark compute & $\approx$ 6.5 GPU-hours \\
+Python version & 3.10 \\
+PyTorch version & 2.0+ \\
+CUDA version & 11.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{B.6 Code and Data Availability}
+
+The complete implementation is available at:
+
+\url{https://github.com/AhmedKElshahed/INR}
+
+The repository includes all architecture implementations, the training and evaluation script (\texttt{train\_3dv2.py}), configuration files, and the exact dataset used for our experiments (\texttt{nefertiti\_dataset.npz}). Raw per-run metrics are recorded in \texttt{results\_3d\_comparison.csv} and per-epoch training curves in \texttt{logs\_3d/}. The result tables in this report are generated directly from that CSV by \texttt{make\_tables.py}, so the reported numbers cannot drift from the underlying data.
+
+To reproduce the benchmark:
+
+\begin{verbatim}
+git clone https://github.com/AhmedKElshahed/INR.git && cd INR
+pip install -r requirements.txt
+python train_3dv2.py --mesh nefertiti.obj --epochs 500
+python make_tables.py
+\end{verbatim}
+
+Note that \texttt{generate\_data.py} has been revised since the dataset was produced and will not reproduce it exactly; the committed \texttt{.npz} should be used instead.

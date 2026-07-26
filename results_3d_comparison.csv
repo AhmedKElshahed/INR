@@ -1,0 +1,10 @@
+Model,Mesh,Epochs,Time(s),Final_Train_IoU,Eval_IoU,Chamfer_L1,Normal_Consistency,Config_Params
+siren,nefertiti,500,2635.3,1.0000,0.9564,0.010905,0.9799,"{'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4}"
+wire,nefertiti,500,3926.6,1.0000,0.9521,0.010903,0.9807,"{'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4}"
+finer,nefertiti,500,2699.2,0.9628,0.9541,0.010946,0.9789,"{'frequency_bands': 16, 'hidden_layers': 4}"
+gauss,nefertiti,500,2778.2,0.9126,0.9158,0.011190,0.9752,"{'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4}"
+mfn,nefertiti,500,2896.1,0.9385,0.9325,0.011035,0.9775,"{'input_scale': 10.0, 'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4}"
+fourier,nefertiti,500,2692.4,1.0000,0.7966,0.051407,0.6542,"{'gamma': 256, 'hidden_layers': 4}"
+incode,nefertiti,500,2797.1,0.9725,0.9641,0.010955,0.9802,"{'scale': 50.0, 'hidden_layers': 4}"
+fr,nefertiti,500,2680.1,0.9976,0.9606,0.010928,0.9784,"{'F': 64, 'hidden_layers': 4}"
+fourier,nefertiti,500,2725.4,0.9892,0.9632,0.010973,0.9809,"{'gamma': 256, 'sigma': 1.0, 'hidden_layers': 4}"

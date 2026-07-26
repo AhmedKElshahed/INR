@@ -1,0 +1,84 @@
+\chapter{Discussion and Conclusion}
+\label{ch:discussion}
+
+This chapter interprets the experimental findings, states what the study does and does not establish, and sets out the limitations that bound those conclusions.
+
+\section{What the Experiment Shows}
+
+We set out to determine which INR architecture performs best for 3D occupancy reconstruction and which architectural properties explain the difference. The honest answer to the first question is that, at the sample size we can afford, the leading methods cannot be separated.
+
+Six architectures --- INCODE, Fourier Features, FR, SIREN, FINER, and WIRE --- fall within 1.2 percentage points of one another on evaluation IoU, and the top two are separated by 0.0009. Each was trained once, with unseeded weight initialization and batch shuffling, so we have no estimate of run-to-run variance against which to judge that spread. The reconstructions are correspondingly difficult to tell apart by eye. Reporting INCODE as ``the winner'' on the strength of 0.9641 against Fourier Features' 0.9632 would assert a precision the experiment plainly does not possess, and we decline to do so.
+
+This is a less satisfying answer than the one we expected, but it is the one the data supports, and stating it plainly is more useful to a practitioner than a ranking that would not survive replication. The practical implication is real, and our ablation on frequency scale sharpens it considerably: if six architectures of quite different design converge to within 1.2 points of each other, while a single hyperparameter within one of them swings performance by 16.7 points, then architecture choice is not the dominant factor in reconstruction quality. Configuration is. Effort spent selecting among these architectures is better spent tuning whichever one is chosen.
+
+The experiment does separate two methods from the rest. MFN (0.9325) and GAUSS (0.9158) trail by 3.2 to 4.8 points, a margin large enough to survive the uncertainty that makes the leading group indistinguishable.
+
+\section{Why the Weak Methods Fail}
+
+The natural reading of GAUSS's oversmoothed reconstruction is a representational one: its Gaussian activation decays rapidly away from the origin, limiting expressible frequency content, so the network defaults to smooth approximations that miss sharp boundaries. This account is intuitive, matches the visual evidence, and is unsupported. If GAUSS were representationally limited it would fit the training data and fail to generalize; it does neither, reaching a training IoU of 0.9126 against an evaluation IoU of 0.9158. MFN behaves the same way at 0.9385.
+
+The distinction matters for practice. A representational limit is a reason to avoid an architecture; an optimization difficulty is a reason to tune it more carefully. Our fixed protocol, adopted to keep the comparison controlled, systematically disadvantages methods whose optimal learning rate differs from the shared default --- and those are precisely the methods that ended up at the bottom of the table. We cannot separate these explanations from our data, and we flag this as the main threat to the validity of the comparison.
+
+The regimes do not, however, order the leading group. FR memorizes and places third; WIRE memorizes and places sixth; INCODE generalizes cleanly and places first. The train--eval gap explains how a method fails when it fails, and it is the diagnostic that exposed the misconfiguration discussed below, but it is not by itself a predictor of final accuracy.
+
+\section{The Property Analysis Does Not Hold}
+
+Chapter~\ref{ch:background} introduced three architectural properties from the survey of Essakine et al.~\cite{essakine2024inr} --- spatial compactness, frequency compactness, and adaptivity --- and we set out to test whether they predict performance.
+
+On our reported results, grouping by frequency compactness gives 0.9465 for the compact methods against 0.9532 for the others: a 0.67 point advantage for the methods \emph{lacking} the property. Reported on its own, this looks like modest evidence that frequency compactness does not help.
+
+It is not stable enough to report on its own. Substituting our $\sigma = 10.0$ Fourier run for the $\sigma = 1.0$ one --- a change to one hyperparameter of one method, leaving the other seven untouched --- moves the comparison to a 3.5 point advantage \emph{in favour} of frequency compactness, reversing the sign and multiplying the magnitude five-fold. Dropping GAUSS, the single weakest run, reverses the sign again, to a 0.36 point advantage. Three defensible versions of the same analysis on the same data yield three different answers, two of which contradict the third.
+
+A conclusion whose sign depends on one hyperparameter, or on the inclusion of one method, is not a conclusion. We therefore report a negative methodological finding: comparing group means across four methods, each run once, cannot establish whether an architectural property matters. This is not a claim that frequency compactness is unimportant --- it is a claim that this experimental design is incapable of assessing it, and that nothing internal to the analysis reveals the problem. Testing the hypothesis properly would require several seeds per method, a variance estimate, and a significance test.
+
+A further confound compounds the problem. Matching depth and width across methods does not match capacity: parameter counts range from 133{,}250 for FR to 1{,}057{,}282 for WIRE, an eight-fold spread. Any grouping of methods is therefore also, incidentally, a grouping by model size, and we cannot attribute differences to the architectural property rather than to capacity.
+
+\section{Configuration Outweighs Architecture}
+
+The most consequential number in this study does not distinguish two architectures. It distinguishes two settings of one parameter within a single architecture.
+
+Fourier Features uses two easily conflated parameters: the number of random frequencies $m$, which sets the width of the encoded input, and the scale $\sigma$, which controls how high those frequencies reach. Only $\sigma$ affects frequency content. Running the architecture at $\sigma = 1.0$ and $\sigma = 10.0$ with everything else fixed gives evaluation IoUs of 0.9632 and 0.7966 --- a gap of 16.7 points. The six leading architectures span 1.2 points. One hyperparameter is therefore worth roughly fourteen times as much as the entire architectural comparison this thesis set out to make.
+
+This reframes the practical question. A practitioner choosing between INCODE, SIREN, and Fourier Features on our evidence is choosing between options that are, as far as we can measure, equivalent. A practitioner setting $\sigma$ is making a decision that dominates that choice completely. The literature on implicit neural representations is largely organized around the former question; our results suggest the latter deserves at least equal attention.
+
+Two features of the failure mode make it particularly worth documenting. It is silent in the training signal: at $\sigma = 10.0$ the model reaches a \emph{perfect} training IoU of 1.0000, better than at $\sigma = 1.0$, so a workflow monitoring training loss would have concluded the misconfigured run was the superior one. And its footprint in the surface metrics is unmistakable once looked for, with normal consistency collapsing from 0.9809 to 0.6542. The diagnostic that matters for this class of model is the train--eval gap, not the training curve.
+
+\section{Practical Recommendations}
+
+Our findings support weaker recommendations than we had hoped to make, and we state them at the strength the evidence bears.
+
+For this task, \textbf{architecture choice among the leading group appears not to be critical}. INCODE, Fourier Features, FR, SIREN, FINER, and WIRE all reach evaluation IoU above 0.95 under an identical protocol. SIREN remains a reasonable default on secondary grounds rather than accuracy: it is the fastest to train, has a single hyperparameter, and is the most widely documented. WIRE is the one method with a clear practical drawback, training 49\% slower than SIREN and carrying four times the parameters for no measurable accuracy benefit.
+
+\textbf{Budget effort for configuration, not architecture selection.} Our frequency-scale ablation moved evaluation IoU by fourteen times the spread separating the leading architectures. Where time is limited, tuning the chosen method will return more than switching methods.
+
+\textbf{GAUSS and MFN should be approached with a learning-rate sweep, not avoided outright.} Both trail under our fixed protocol, but both fail on their training data, which points to optimization rather than representational limits. We cannot recommend them on this evidence, but neither can we responsibly recommend against them --- our experiment did not give them the per-architecture tuning they appear to need.
+
+\textbf{Monitor the train--eval gap.} It is the quantity that distinguished the three failure modes we observed --- memorization, underfitting, and misconfiguration --- none of which is visible in a training curve alone.
+
+\section{Limitations}
+
+\textbf{No repeated runs.} Each configuration was trained once, and only the data split is seeded; weight initialization, batch shuffling, and the surface sampling behind Chamfer-L1 and normal consistency all vary between runs. Without a variance estimate we cannot attach uncertainty to any number in this report, and this single limitation is what prevents the leading group from being ranked and the property analysis from being conclusive. It is the first thing that should be fixed.
+
+\textbf{Single mesh.} We evaluate on the Nefertiti bust alone. Performance on CAD models with precise geometric primitives, on porous or lattice structures, or on multi-scale objects remains untested, and our observations may be specific to this class of geometry.
+
+\textbf{Unmatched capacity.} Depth and width are held constant, but parameter counts vary eight-fold, confounding architecture with model size throughout.
+
+\textbf{A protocol that penalizes sensitive methods.} A single shared learning rate keeps the comparison controlled but disadvantages architectures whose optimal rate differs from it --- which, on our evidence, is exactly what happened to GAUSS and MFN.
+
+\textbf{Single-shape fitting.} Each network is fitted to one shape. We do not evaluate generalization to unseen geometry, which is what applications such as shape completion actually require.
+
+\textbf{Detail below the metric's resolution.} No method recovered the crown ornamentation or the headdress edge, yet all leading methods score above 0.95. IoU is dominated by interior volume and is largely insensitive to the surface detail this mesh was chosen to test; a more discriminative metric would likely have been more informative.
+
+\section{Future Work}
+
+The clear first priority is \textbf{repeated runs}. Three to five seeds per method, reported as mean and standard deviation with a significance test, would determine whether the leading group is genuinely tied and would make the property analysis meaningful. A full pass over the eight methods costs 6.4 GPU-hours, so three seeds require roughly 19 and five roughly 32 --- three to four times what this study consumed, but still within reach of free-tier cloud quotas for the three-seed case. No other change would do as much for the reliability of these conclusions.
+
+Second, \textbf{per-architecture learning-rate sweeps} would settle whether GAUSS and MFN are representationally limited or merely hard to optimize. Third, \textbf{a more discriminative evaluation}: since IoU saturates well before reconstructions become visually acceptable, surface-weighted metrics would better reflect the differences that matter. Beyond these, \textbf{broader geometry} would test how far any recommendation generalizes, and \textbf{capacity-matched comparison} would remove the eight-fold parameter confound.
+
+\section{Closing Remarks}
+
+Implicit neural representations offer a genuinely attractive account of 3D shape: resolution independence, memory cost tied to network size rather than output detail, and continuous differentiability. Our experiments confirm that a range of architectures can represent a complex mesh to above 0.95 IoU with a few hundred thousand parameters.
+
+The main lesson of this study, however, is methodological. A grouped analysis of our data supports the claim that frequency compactness confers a decisive 3.5 point advantage, the claim that it costs 0.67 points, and the claim that it confers 0.36 --- depending on one hyperparameter of one method, or on whether the weakest run is included. Any of the three could have been reported as a finding, and nothing internal to the analysis would have exposed the other two. With one run per configuration, differences of a percentage point cannot be distinguished from noise, and grouped means built on such differences fail in ways that stay invisible unless deliberately tested for.
+
+The corrective is well understood and, at this scale, affordable: run each configuration several times, report variance, and test significance before drawing conclusions. Three seeds across the eight methods would cost roughly 19 GPU-hours against the 7 this study consumed --- a real but modest price for conclusions that currently cannot be defended. We regard establishing that requirement, and demonstrating concretely what goes wrong without it, as the most durable contribution of this work.
