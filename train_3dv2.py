@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import csv
+import random
 import argparse
 import traceback
 from torch.utils.data import DataLoader, random_split
@@ -22,6 +23,18 @@ MODEL_LR_OVERRIDES = {
     'gauss': 1e-3,   # Gaussian activations need high LR; 3e-4 converges to 0.65 only, 1e-3 reaches 0.85
     'mfn':   3e-4,   # plateaus at train IoU 0.91 at default 1e-4; 3e-4 reaches 0.93
 }
+
+
+def set_seed(seed):
+    """Seed every RNG that affects a run: weight initialization and batch
+    shuffling. The train/val split keeps its own fixed seed (see below), so
+    changing this seed varies training stochasticity while every run is scored
+    on the same held-out points."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
 
 # ============================================================================
 # 3D METRIC UTILS
@@ -156,8 +169,11 @@ def compute_eval_iou(model, val_loader, device):
 # ============================================================================
 
 def train_occupancy(model_name, dataset_path, mesh_path=None,
-                    epochs=500, batch_size=4096, lr=1e-4, args_res=None):
+                    epochs=500, batch_size=4096, lr=1e-4, args_res=None, seed=0):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Seed before the model is built, so weight initialization is controlled.
+    set_seed(seed)
 
     cfg = BEST_CONFIGS_3D[model_name].copy()
     params_str = str(cfg)
@@ -170,6 +186,9 @@ def train_occupancy(model_name, dataset_path, mesh_path=None,
     dataset = OccupancyDataset(dataset_path)
     val_size   = max(1, int(0.1 * len(dataset)))
     train_size = len(dataset) - val_size
+    # Fixed generator, independent of the run seed: every seed is evaluated on
+    # the SAME held-out points, so eval-IoU differences reflect training
+    # stochasticity rather than a different validation set.
     train_ds, val_ds = random_split(
         dataset, [train_size, val_size],
         generator=torch.Generator().manual_seed(42)
@@ -189,7 +208,7 @@ def train_occupancy(model_name, dataset_path, mesh_path=None,
     # ---- Per-epoch log ----
     log_dir = "logs_3d"
     os.makedirs(log_dir, exist_ok=True)
-    epoch_log = f"{log_dir}/{model_name}_training.csv"
+    epoch_log = f"{log_dir}/{model_name}_seed{seed}_training.csv"
     with open(epoch_log, 'w', newline='') as f:
         csv.writer(f).writerow(['epoch', 'train_loss', 'train_iou', 'lr'])
 
@@ -285,6 +304,12 @@ if __name__ == "__main__":
     parser.add_argument("--models", type=str,   nargs="+", default=all_models,
                         choices=all_models, metavar="MODEL",
                         help=f"Models to run (default: all). Choices: {all_models}")
+    parser.add_argument("--seeds",  type=int,   nargs="+", default=[0],
+                        help="One or more run seeds. Pass several (e.g. --seeds 0 1 2) "
+                             "for a multi-seed study; each (model, seed) is one row.")
+    parser.add_argument("--out",    type=str,   default=None,
+                        help="Results CSV. Default: results_3d_comparison.csv for a "
+                             "single seed, results_3d_seeds.csv for multiple.")
     args = parser.parse_args()
 
     base_name    = os.path.splitext(args.mesh)[0]
@@ -296,54 +321,63 @@ if __name__ == "__main__":
         exit(1)
 
     models_to_run = args.models
+    seeds = args.seeds
 
-    csv_file = 'results_3d_comparison.csv'
-    write_header = not os.path.exists(csv_file)
-    with open(csv_file, 'a', newline='') as f:
-        if write_header:
-            csv.writer(f).writerow([
-                'Model', 'Mesh', 'Epochs', 'Time(s)',
-                'Final_Train_IoU', 'Eval_IoU',
-                'Chamfer_L1', 'Normal_Consistency',
-                'Config_Params'
-            ])
+    # Keep single-seed runs writing the legacy file; send multi-seed studies to a
+    # separate file so the two schemas never collide.
+    csv_file = args.out or ('results_3d_comparison.csv' if len(seeds) == 1
+                            else 'results_3d_seeds.csv')
+
+    # Respect an existing file's header; only a fresh file gets the Seed column.
+    full_cols = ['Model', 'Mesh', 'Epochs', 'Time(s)', 'Final_Train_IoU',
+                 'Eval_IoU', 'Chamfer_L1', 'Normal_Consistency', 'Config_Params', 'Seed']
+    if os.path.exists(csv_file):
+        with open(csv_file, newline='') as f:
+            cols = next(csv.reader(f))
+    else:
+        cols = full_cols
+        with open(csv_file, 'a', newline='') as f:
+            csv.writer(f).writerow(cols)
 
     print(f"\n=== 3D Occupancy Benchmark ===")
     print(f"  Mesh   : {args.mesh}")
     print(f"  Epochs : {args.epochs}")
-    print(f"  LR     : {args.lr}")
+    print(f"  Seeds  : {seeds}")
     print(f"  Models : {models_to_run}")
     print(f"  Output : {csv_file}")
 
-    for mname in models_to_run:
-        try:
-            print(f"\n{'='*60}")
-            print(f">> STARTING: {mname.upper()}")
-            bs = 16384 if torch.cuda.is_available() else 2048
+    for seed in seeds:
+        for mname in models_to_run:
+            try:
+                print(f"\n{'='*60}")
+                print(f">> STARTING: {mname.upper()}  (seed {seed})")
+                bs = 16384 if torch.cuda.is_available() else 2048
 
-            duration, train_iou, eval_iou, chamfer, nc, cfg_str = train_occupancy(
-                mname, dataset_file,
-                mesh_path=args.mesh,
-                epochs=args.epochs,
-                batch_size=bs,
-                lr=args.lr,
-                args_res=args.res,
-            )
+                duration, train_iou, eval_iou, chamfer, nc, cfg_str = train_occupancy(
+                    mname, dataset_file,
+                    mesh_path=args.mesh,
+                    epochs=args.epochs,
+                    batch_size=bs,
+                    lr=args.lr,
+                    args_res=args.res,
+                    seed=seed,
+                )
 
-            with open(csv_file, 'a', newline='') as f:
-                csv.writer(f).writerow([
-                    mname, base_name, args.epochs,
-                    f"{duration:.1f}",
-                    f"{train_iou:.4f}",
-                    f"{eval_iou:.4f}",
-                    f"{chamfer:.6f}" if not np.isnan(chamfer) else 'N/A',
-                    f"{nc:.4f}"      if not np.isnan(nc)      else 'N/A',
-                    cfg_str,
-                ])
+                row = {
+                    'Model': mname, 'Mesh': base_name, 'Epochs': args.epochs,
+                    'Time(s)': f"{duration:.1f}",
+                    'Final_Train_IoU': f"{train_iou:.4f}",
+                    'Eval_IoU': f"{eval_iou:.4f}",
+                    'Chamfer_L1': f"{chamfer:.6f}" if not np.isnan(chamfer) else 'N/A',
+                    'Normal_Consistency': f"{nc:.4f}" if not np.isnan(nc) else 'N/A',
+                    'Config_Params': cfg_str, 'Seed': seed,
+                }
+                with open(csv_file, 'a', newline='') as f:
+                    csv.writer(f).writerow([row.get(c, '') for c in cols])
 
-        except Exception as e:
-            print(f"[FAIL] {mname} crashed: {e}")
-            traceback.print_exc()
+            except Exception as e:
+                print(f"[FAIL] {mname} (seed {seed}) crashed: {e}")
+                traceback.print_exc()
 
     print(f"\n{'='*60}")
     print(f"Done. Results -> {csv_file} | Meshes -> outputs_3d/")
