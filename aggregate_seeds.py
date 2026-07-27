@@ -27,9 +27,10 @@ from collections import defaultdict
 import numpy as np
 
 CSV_PATH = "results_3d_seeds.csv"
-TEX_TABLE = os.path.join("thesis3", "generated_tables_seeds.tex")
-TEX_STATS = os.path.join("thesis3", "generated_stats.tex")
-FIG_PATH = os.path.join("thesis3", "Figures", "results", "iou_error_bars.png")
+THESIS_DIR = os.environ.get("THESIS_DIR", "thesis4")   # override with THESIS_DIR=... if renamed
+TEX_TABLE = os.path.join(THESIS_DIR, "generated_tables_seeds.tex")
+TEX_STATS = os.path.join(THESIS_DIR, "generated_stats.tex")
+FIG_PATH = os.path.join(THESIS_DIR, "Figures", "results", "iou_error_bars.png")
 
 DISPLAY = {
     "fourier": "Fourier Features", "incode": "INCODE", "fr": "FR", "siren": "SIREN",
@@ -140,9 +141,9 @@ def write_table(ranked, cluster):
         rf"Holm-corrected Welch $t$-test cannot separate from the best --- are marked "
         rf"$\dagger$. Chamfer-L1 and normal consistency are seed means.}}",
         r"\label{tab:seed_results}",
-        r"\begin{tabular}{lcccc}", r"\toprule",
+        r"\begin{tabular}{lccc}", r"\toprule",
         r"\textbf{Method} & \textbf{Eval IoU (mean $\pm$ std)} $\uparrow$ & "
-        r"\textbf{Chamfer-L1} $\downarrow$ & \textbf{Normal Cons.} $\uparrow$ & \\",
+        r"\textbf{Chamfer-L1} $\downarrow$ & \textbf{Normal Cons.} $\uparrow$ \\",
         r"\midrule",
     ]
     for r in ranked:
@@ -152,7 +153,7 @@ def write_table(ranked, cluster):
         if bold:
             cell = rf"\textbf{{{cell}}}"
         L.append(f"{DISPLAY[r['model']]}{dag} & {cell} & "
-                 f"{r['chamfer']:.6f} & {r['nc']:.4f} & \\\\")
+                 f"{r['chamfer']:.6f} & {r['nc']:.4f} \\\\")
     L += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     os.makedirs(os.path.dirname(TEX_TABLE), exist_ok=True)
     with open(TEX_TABLE, "w") as f:

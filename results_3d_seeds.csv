@@ -1,0 +1,33 @@
+Model,Mesh,Epochs,Time(s),Final_Train_IoU,Eval_IoU,Chamfer_L1,Normal_Consistency,Config_Params,Seed
+wire,nefertiti,500,4141.7,1.0000,0.9495,0.010957,0.9794,"{'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4}",0
+siren,nefertiti,500,2913.5,1.0000,0.9566,0.010976,0.9784,"{'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4}",0
+fr,nefertiti,500,2863.5,0.9976,0.9559,0.010977,0.9806,"{'F': 64, 'hidden_layers': 4}",0
+gauss,nefertiti,500,2916.1,0.8970,0.9040,0.011260,0.9731,"{'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4}",0
+mfn,nefertiti,500,3077.2,0.9385,0.9311,0.011054,0.9769,"{'input_scale': 10.0, 'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4}",0
+fourier,nefertiti,500,2838.8,0.9896,0.9672,0.011077,0.9794,"{'gamma': 256, 'sigma': 1.0, 'hidden_layers': 4}",0
+incode,nefertiti,500,2949.0,0.9798,0.9695,0.010953,0.9801,"{'scale': 50.0, 'hidden_layers': 4}",0
+wire,nefertiti,500,4109.9,1.0000,0.9526,0.010923,0.9794,"{'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4}",1
+siren,nefertiti,500,2786.5,1.0000,0.9580,0.010969,0.9805,"{'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4}",1
+fr,nefertiti,500,2756.5,0.9985,0.9589,0.010908,0.9816,"{'F': 64, 'hidden_layers': 4}",1
+finer,nefertiti,500,2753.1,0.9635,0.9544,0.010959,0.9791,"{'frequency_bands': 16, 'hidden_layers': 4}",1
+gauss,nefertiti,500,2894.5,0.9205,0.9222,0.011199,0.9747,"{'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4}",1
+mfn,nefertiti,500,3006.7,0.9387,0.9319,0.011021,0.9790,"{'input_scale': 10.0, 'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4}",1
+fourier,nefertiti,500,2750.4,0.9898,0.9688,0.011038,0.9796,"{'gamma': 256, 'sigma': 1.0, 'hidden_layers': 4}",1
+incode,nefertiti,500,2896.0,0.9778,0.9645,0.010923,0.9813,"{'scale': 50.0, 'hidden_layers': 4}",1
+wire,nefertiti,500,4098.0,1.0000,0.9569,0.011091,0.9799,"{'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4}",2
+siren,nefertiti,500,2815.3,1.0000,0.9574,0.010999,0.9803,"{'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4}",2
+fr,nefertiti,500,2795.8,0.9978,0.9540,0.011047,0.9809,"{'F': 64, 'hidden_layers': 4}",2
+finer,nefertiti,500,2785.5,0.9641,0.9544,0.010967,0.9790,"{'frequency_bands': 16, 'hidden_layers': 4}",2
+gauss,nefertiti,500,2831.8,0.9122,0.9129,0.011178,0.9771,"{'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4}",2
+mfn,nefertiti,500,2997.1,0.9380,0.9311,0.011132,0.9792,"{'input_scale': 10.0, 'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4}",2
+fourier,nefertiti,500,2735.9,0.9891,0.9668,0.010989,0.9794,"{'gamma': 256, 'sigma': 1.0, 'hidden_layers': 4}",2
+incode,nefertiti,500,2868.4,0.9842,0.9672,0.011015,0.9808,"{'scale': 50.0, 'hidden_layers': 4}",2
+wire,nefertiti,500,4149.6,1.0000,0.9511,0.010919,0.9796,"{'first_omega_0': 40.0, 'hidden_omega_0': 20.0, 'sigma0': 3.0, 'hidden_layers': 4}",3
+siren,nefertiti,500,2833.2,1.0000,0.9527,0.010840,0.9804,"{'first_omega_0': 30.0, 'hidden_omega_0': 30.0, 'hidden_layers': 4}",3
+fr,nefertiti,500,2817.8,0.9981,0.9559,0.010977,0.9811,"{'F': 64, 'hidden_layers': 4}",3
+finer,nefertiti,500,2800.8,0.9638,0.9526,0.010940,0.9801,"{'frequency_bands': 16, 'hidden_layers': 4}",3
+gauss,nefertiti,500,2828.8,0.9155,0.9199,0.011258,0.9773,"{'input_scale': 20.0, 'sigma': 1.0, 'hidden_layers': 4}",3
+mfn,nefertiti,500,2999.7,0.9389,0.9337,0.011072,0.9779,"{'input_scale': 10.0, 'alpha': 6.0, 'beta': 1.0, 'hidden_layers': 4}",3
+fourier,nefertiti,500,2748.2,0.9899,0.9681,0.010953,0.9798,"{'gamma': 256, 'sigma': 1.0, 'hidden_layers': 4}",3
+incode,nefertiti,500,2879.4,0.9842,0.9685,0.010929,0.9811,"{'scale': 50.0, 'hidden_layers': 4}",3
+finer,nefertiti,500,2867.6,0.9643,0.9564,0.010951,0.9785,"{'frequency_bands': 16, 'hidden_layers': 4}",0

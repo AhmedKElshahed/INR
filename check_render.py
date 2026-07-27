@@ -15,7 +15,7 @@ import sys
 import numpy as np
 from PIL import Image
 
-REF_DIR = os.path.join("thesis3", "Figures", "results")
+REF_DIR = os.path.join("thesis4", "Figures", "results")
 TOL = {"tone": 8.0, "bbox_h_frac": 0.02, "aspect": 0.05}
 
 

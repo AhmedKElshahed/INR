@@ -22,19 +22,19 @@ We implemented eight INR architectures (SIREN, WIRE, GAUSS, FINER, Fourier Featu
 We compared reconstruction metrics across methods to establish performance ranking. We grouped methods by architectural properties and computed average performance for each group to identify which properties correlate with success.
 
 \subsection*{6. What evidence/data (values for the variables) were obtained?}
-Evaluation IoU ranged from 0.9158 (GAUSS) to 0.9641 (INCODE), with six of the eight methods clustered between 0.9521 and 0.9641 and the top two separated by 0.0009. Training times ranged from 2635 seconds (SIREN) to 3927 seconds (WIRE), with seven of eight inside a 10\% band. A controlled ablation on the Fourier frequency scale gave 0.9632 at $\sigma = 1.0$ against 0.7966 at $\sigma = 10.0$.
+Over four seeds, evaluation IoU ranged from $0.9148 \pm 0.0082$ (GAUSS) to $0.9677 \pm 0.0009$ (Fourier Features), with INCODE tied at the top ($0.9674 \pm 0.0022$) and a middle group (SIREN, FR, FINER, WIRE) near 0.952--0.956. A controlled ablation on the Fourier frequency scale gave 0.9632 at $\sigma = 1.0$ against 0.7966 at $\sigma = 10.0$.
 
 \subsection*{7. What were the results of the analyses?}
-The six leading methods could not be separated: their 1.2 percentage point spread is not distinguishable from run-to-run variation, since each configuration was trained once without seeded initialization. MFN and GAUSS trailed clearly, but both failed to fit their own training data, indicating optimization difficulty rather than a representational limit. The frequency-scale ablation moved accuracy by 16.7 points, fourteen times the spread between architectures, while improving training accuracy to a perfect 1.0000.
+A one-way ANOVA rejected equality of means ($p \approx 10^{-16}$), and Holm-corrected Welch $t$-tests placed Fourier Features and INCODE in a top tier that is statistically indistinguishable internally but significantly ahead of every other method. MFN and GAUSS trailed clearly and both failed to fit their own training data, indicating optimization difficulty rather than a representational limit. The frequency-scale ablation moved accuracy by 16.7 points --- an order of magnitude more than any gap between architectures --- while improving training accuracy to 1.0000.
 
 \subsection*{8. How did the analyses answer the central question?}
-Partially, and in an unexpected direction: the comparison did not identify a best architecture, because the leading methods are indistinguishable at this sample size, while one hyperparameter within a single method outweighed every architectural difference combined. The two weakest methods were shown to fail for optimization rather than representational reasons. The grouped property analysis proved unsound, supporting a $+3.5$, $-0.67$, or $+0.36$ percentage point conclusion depending on one hyperparameter or one included method.
+They identified a genuine best tier (Fourier Features and INCODE) that a single run had missed, while showing that architecture is not the largest lever: one hyperparameter within a single method outweighed every architectural difference. The two weakest methods were shown to fail for optimization rather than representational reasons. The grouped property analysis proved unsound: the frequency-compactness advantage flips sign when the single weakest method is removed, and the best tier pairs a compact method with a non-compact one.
 
 \subsection*{9. What does this answer tell us about the broader field?}
-Architectural property taxonomies of the kind proposed in recent surveys are attractive but require careful empirical validation: with one run per configuration, a grouped mean can be dominated by a single outlier and report a confident conclusion in either direction. Comparisons that hold depth and width fixed should also report parameter counts, since matching architecture does not match capacity.
+Single-run comparisons are unreliable for differences of a percentage point: our own single run reported a different leader and a spurious near-tie that repeated runs overturned. Architectural property taxonomies of the kind proposed in recent surveys require validation that a grouped mean over few methods cannot provide, and comparisons holding depth and width fixed should report parameter counts, since matching architecture does not match capacity.
 
 \subsection*{10. Did the thesis answer the question satisfactorily?}
-Not in the form originally posed: we could not determine which architecture is best, because the experiment lacks the repeated runs needed to resolve differences of this size. What it does establish is the separation of three distinct failure modes and the demonstration that a property-based analysis over single runs can reverse its own conclusion. The main limitations are the absence of repeated runs, evaluation on a single mesh, an eight-fold spread in parameter counts, and single-shape fitting without generalization testing.
+Yes, with appropriately bounded confidence. Repeated runs identified a best tier for this task and separated it from the field with a significance test, while the study is candid about what it cannot resolve: the middle group's internal ordering, the influence of an eight-fold spread in parameter counts, and generalization beyond a single mesh and single-shape fitting. Its most transferable result is methodological --- a direct demonstration that a single run would have reported the wrong ranking.
 
 \newpage
 
@@ -213,15 +213,15 @@ The complete implementation is available at:
 
 \url{https://github.com/AhmedKElshahed/INR}
 
-The repository includes all architecture implementations, the training and evaluation script (\texttt{train\_3dv2.py}), configuration files, and the exact dataset used for our experiments (\texttt{nefertiti\_dataset.npz}). Raw per-run metrics are recorded in \texttt{results\_3d\_comparison.csv} and per-epoch training curves in \texttt{logs\_3d/}. The result tables in this report are generated directly from that CSV by \texttt{make\_tables.py}, so the reported numbers cannot drift from the underlying data.
+The repository includes all architecture implementations, the training and evaluation script (\texttt{train\_3dv2.py}), configuration files, and the exact dataset used for our experiments (\texttt{nefertiti\_dataset.npz}). Per-seed metrics are recorded in \texttt{results\_3d\_seeds.csv} and per-epoch training curves in \texttt{logs\_3d/}. The results table, error-bar figure, and significance test in this report are generated directly from that CSV by \texttt{aggregate\_seeds.py}, so the reported numbers cannot drift from the underlying data.
 
-To reproduce the benchmark:
+To reproduce the four-seed benchmark:
 
 \begin{verbatim}
 git clone https://github.com/AhmedKElshahed/INR.git && cd INR
 pip install -r requirements.txt
-python train_3dv2.py --mesh nefertiti.obj --epochs 500
-python make_tables.py
+python train_3dv2.py --mesh nefertiti.obj --epochs 500 --seeds 0 1 2 3
+python aggregate_seeds.py
 \end{verbatim}
 
 Note that \texttt{generate\_data.py} has been revised since the dataset was produced and will not reproduce it exactly; the committed \texttt{.npz} should be used instead.

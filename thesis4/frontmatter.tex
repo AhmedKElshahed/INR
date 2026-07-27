@@ -1,0 +1,36 @@
+% !TeX encoding = UTF-8
+% !TeX root = MAIN.tex
+
+\chapter*{Statutory Declaration}
+\addcontentsline{toc}{chapter}{Statutory Declaration}
+
+I hereby declare that the thesis submitted is my own unaided work, that I have not used other than the sources indicated, and that all direct and indirect sources are acknowledged as references.
+
+This printed thesis is identical with the electronic version submitted.
+
+\vspace{2cm}
+
+\chapter*{Acknowledgement}
+
+%TODO write your own Acknowledgement
+I would like to express my sincere gratitude to my supervisor, MSc. Eric Volkmann, for his unwavering support, practical guidance, and constant encouragement throughout the course of this thesis. His direct involvement, technical expertise, and readiness to assist played a pivotal role in the successful development and completion of this work.
+
+I am grateful to the Institute of Machine Learning at Johannes Kepler University Linz for providing the academic environment and computational resources necessary for this research.
+
+
+Finally, I thank my family and friends for their continuous support and encouragement throughout my studies.
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+% Research area and relevance
+Representing three-dimensional shapes is a fundamental challenge in graphics, robotics, and medical imaging. Rather than storing a grid of samples, a neural network can learn a continuous function that determines whether any point lies inside or outside an object, making memory cost independent of resolution. Standard networks struggle to capture sharp detail, however, a limitation that has produced many specialized architectures and little guidance on which to choose.
+
+% Aim and methods
+This thesis evaluates eight such architectures under an identical training protocol on the Nefertiti bust, a cultural heritage scan combining smooth facial geometry with fine ornamental detail. Each method is run over four random seeds and compared by intersection-over-union on held-out points --- with error bars and a significance test --- alongside Chamfer distance and normal consistency, and we test whether architectural properties proposed in a recent survey predict the differences observed.
+
+% Results
+Two methods form a distinct top tier: Fourier Features and INCODE are statistically indistinguishable from each other but significantly ahead of the rest. A single run had instead suggested a six-way near-tie with a different leader, so the seeds were what separated signal from noise. Yet architecture is not the largest lever: a controlled ablation on one method's frequency scale moved accuracy by 16.7 points --- an order of magnitude more than the gap between the best tier and the next.
+
+% Conclusion
+Two conclusions follow. There is a genuine best tier for this task, but configuration can outweigh the choice of architecture by an order of magnitude, so tuning a capable method matters more than selecting among capable methods. And the survey's architectural properties do not predict the winners: the best tier pairs one method with frequency compactness and one without, and a grouped comparison of the property flips sign when a single method is removed. The implementation, dataset, and analysis scripts are released in full.

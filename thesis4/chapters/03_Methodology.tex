@@ -39,6 +39,8 @@ We train all networks using the Adam optimizer~\cite{kingma2014adam}, which adap
 
 Training runs for 500 epochs with batches of 16,384 points, using the 450,000-point training split; the remaining 50,000 points are held out for evaluation. We apply gradient clipping to prevent instabilities---if gradients grow too large, we scale them down to a maximum norm of 1.0. This is particularly important for methods like WIRE that use complex numbers.
 
+To distinguish real differences between methods from run-to-run chance, we train each method under four random seeds. The seed controls weight initialization and the order in which batches are shuffled; the train/validation split is held fixed across seeds, so every run of every method is scored on the same 50,000 held-out points. This lets us report each metric as a mean and standard deviation, place error bars on the results, and apply a statistical test to ask whether two methods genuinely differ or merely differ by chance.
+
 The loss function is Binary Cross-Entropy, which is standard for classification tasks. It penalizes confident wrong predictions heavily: if the network says a point is definitely inside when it is actually outside, the loss is large. This encourages the network to be accurate especially near boundaries where mistakes are most visible.
 
 \section{Measuring Performance}
@@ -48,6 +50,8 @@ We measure performance in two complementary ways, and it is important to keep th
 Our primary metric is Intersection over Union (IoU) on the held-out validation split. We query the trained network at the 50,000 points it never saw during training, threshold the outputs at 0.5, and compute the overlap between predicted and true occupied sets. An IoU of 1.0 means perfect classification; lower values indicate errors. We report this alongside the final training IoU, since the gap between the two reveals whether a method has learned the underlying geometry or merely memorized the training points.
 
 Our secondary metrics assess the reconstructed surface rather than point labels. We query the network on a dense $256 \times 256 \times 256$ grid (over 16 million points) covering the bounding box and extract a mesh at the 0.5 level set using Marching Cubes~\cite{lorensen1987marching}. From this mesh we compute Chamfer-L1 distance, the average nearest-neighbour distance between points sampled on the predicted and ground-truth surfaces, and normal consistency, the average alignment of their surface normals. Both are estimated from surface samples drawn at random, so small differences between methods should not be over-interpreted.
+
+To compare methods, we aggregate the four seeds per method into a mean and standard deviation, and test for genuine differences with a one-way analysis of variance across all methods followed by Welch $t$-tests between the best method and each other, with a Holm correction for multiple comparisons. Methods that the corrected test cannot separate from the best form a ``leading cluster'' reported together. With four seeds these tests have limited statistical power, so we treat a failure to separate two methods as an absence of resolvable difference, not as proof of equality.
 
 \section{Hyperparameter Selection}
 
